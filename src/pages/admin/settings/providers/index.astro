@@ -1,0 +1,64 @@
+---
+/**
+ * Providers list page — grid of provider cards showing configuration status.
+ * Route: /admin/plugins/invoicing/settings/providers
+ */
+import AdminLayout from 'pelerin:admin-layout';
+import { createPluginContext } from 'pelerin:plugin-sdk';
+import { isProviderConfigured } from '../../../../lib/data/providers.ts';
+import { listProviderObjects } from '../../../../providers/invoicing/registry.ts';
+import '../../../../providers/invoicing/index.ts'; // trigger provider auto-registration
+
+const sdk = createPluginContext();
+const user = await sdk.auth.requireAdmin(Astro.request);
+
+const providers = listProviderObjects();
+
+const configured = new Set<string>();
+for (const p of providers) {
+  try {
+    if (await isProviderConfigured(sdk.db, p.name)) configured.add(p.name);
+  } catch {
+    // treat as not configured
+  }
+}
+---
+
+<AdminLayout
+  title="Provider Settings"
+  currentPath="/admin/plugins/invoicing/settings/providers"
+  user={user}
+>
+  <div class="col-span-12">
+    <h1 class="text-2xl font-bold mb-6">Invoicing Providers</h1>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl">
+      {
+        providers.map((p) => {
+          const isConfigured = configured.has(p.name);
+          return (
+            <a
+              href={`/admin/plugins/invoicing/settings/providers/${p.name}`}
+              class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow"
+            >
+              <div class="card-body">
+                <div class="flex items-center gap-3">
+                  <span class="text-3xl">🧾</span>
+                  <div>
+                    <h2 class="card-title text-lg capitalize">{p.name}</h2>
+                    <p class="text-sm text-base-content/60">{p.name} invoicing provider</p>
+                  </div>
+                </div>
+                <div class="card-actions justify-end mt-2">
+                  <span class={`badge ${isConfigured ? 'badge-success' : 'badge-warning'} gap-1`}>
+                    {isConfigured ? '✓ Configured' : '⚠ Not configured'}
+                  </span>
+                </div>
+              </div>
+            </a>
+          );
+        })
+      }
+    </div>
+  </div>
+</AdminLayout>

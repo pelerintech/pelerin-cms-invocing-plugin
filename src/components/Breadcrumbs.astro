@@ -1,0 +1,30 @@
+---
+/**
+ * Breadcrumbs component — renders breadcrumb navigation matching CMS design.
+ *
+ * @prop {Array<{label: string, href?: string}>} paths - Array of breadcrumb items
+ */
+interface Props {
+  paths: Array<{ label: string; href?: string }>;
+}
+
+const { paths } = Astro.props;
+---
+
+<div class="breadcrumbs text-sm">
+  <ul>
+    {
+      paths.map((item, index) => {
+        const isLast = index === paths.length - 1;
+        if (isLast || !item.href) {
+          return <li>{item.label}</li>;
+        }
+        return (
+          <li>
+            <a href={item.href}>{item.label}</a>
+          </li>
+        );
+      })
+    }
+  </ul>
+</div>

@@ -1,0 +1,130 @@
+---
+/**
+ * Provider configuration page — form generated from the provider's
+ * getConfigSchema().fields. Route: /admin/plugins/invoicing/settings/providers/[name]
+ */
+import AdminLayout from 'pelerin:admin-layout';
+import { createPluginContext } from 'pelerin:plugin-sdk';
+import { getProvider } from '../../../../providers/invoicing/registry.ts';
+import { getProviderSettings } from '../../../../lib/data/providers.ts';
+import '../../../../providers/invoicing/index.ts'; // trigger provider auto-registration
+
+const sdk = createPluginContext();
+const user = await sdk.auth.requireAdmin(Astro.request);
+const name = Astro.params.name;
+
+const provider = getProvider(name);
+const schema = provider?.getConfigSchema();
+const fields = schema?.fields ?? {};
+
+// Load existing settings server-side (the admin API would 401 without a session cookie).
+let existing: Record<string, string> = {};
+try {
+  if (provider) existing = await getProviderSettings(sdk.db, name);
+} catch {
+  // silently fail
+}
+---
+
+<AdminLayout
+  title={`Configure ${name}`}
+  currentPath={`/admin/plugins/invoicing/settings/providers/${name}`}
+  user={user}
+>
+  <div class="col-span-12 max-w-xl">
+    {
+      !provider || !schema ? (
+        <div>
+          <h1 class="text-2xl font-bold text-error">Provider not found</h1>
+          <p>Unknown provider: {name}</p>
+        </div>
+      ) : (
+        <div>
+          <h1 class="text-2xl font-bold mb-6 capitalize">Configure {name}</h1>
+
+          <form id="settings-form">
+            {Object.entries(fields).map(([key, field]) => (
+              <div class="form-control mb-4">
+                <label class="label">
+                  <span class="label-text font-medium">{field.label}</span>
+                </label>
+                <span class="text-xs text-base-content/50 mb-1 block">{field.description}</span>
+                {field.type === 'select' ? (
+                  <select name={key} class="select select-bordered w-full">
+                    {(field.options || []).map((opt) => (
+                      <option
+                        value={opt.value}
+                        selected={
+                          existing[key] === opt.value ||
+                          (!existing[key] && (field.default || 'test') === opt.value)
+                        }
+                      >
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type={field.type}
+                    name={key}
+                    placeholder={field.placeholder}
+                    class="input input-bordered w-full"
+                    value={
+                      field.type === 'password'
+                        ? existing[key]
+                          ? existing[key]
+                          : ''
+                        : existing[key] || field.default || ''
+                    }
+                  />
+                )}
+              </div>
+            ))}
+            <div class="flex gap-2 mt-6">
+              <button type="submit" class="btn btn-primary">
+                Save Configuration
+              </button>
+              <a href="/admin/plugins/invoicing/settings/providers" class="btn btn-ghost">
+                Cancel
+              </a>
+            </div>
+          </form>
+
+          <div id="status-msg" class="mt-4 hidden" />
+        </div>
+      )
+    }
+  </div>
+</AdminLayout>
+
+<script>
+  const form = document.getElementById('settings-form');
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const body = {};
+      for (const [key, value] of formData.entries()) {
+        body[key] = value;
+      }
+      const providerName = window.location.pathname.split('/').pop();
+      const res = await fetch(`/api/plugins/invoicing/providers/${providerName}/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const statusEl = document.getElementById('status-msg');
+      if (res.ok) {
+        const data = await res.json();
+        statusEl.className = 'alert alert-success';
+        statusEl.innerHTML = data.message || 'Settings saved successfully';
+        statusEl.classList.remove('hidden');
+      } else {
+        const err = await res.json();
+        statusEl.className = 'alert alert-error';
+        statusEl.innerHTML = err.error || 'Failed to save settings';
+        statusEl.classList.remove('hidden');
+      }
+    });
+  }
+</script>

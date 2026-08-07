@@ -1,0 +1,215 @@
+---
+// Admin: Invoice detail
+// Route: /admin/plugins/invoicing/invoices/[id]
+import AdminLayout from 'pelerin:admin-layout';
+import { createPluginContext } from 'pelerin:plugin-sdk';
+import { getInvoiceById } from '../../../lib/data/invoices.ts';
+
+const sdk = createPluginContext();
+const user = await sdk.auth.requireAdmin(Astro.request);
+const invoiceId = Astro.params.id;
+const invoice = invoiceId ? await getInvoiceById(sdk.db, invoiceId) : null;
+
+const statusColors: Record<string, string> = {
+  received: 'badge-ghost',
+  pending: 'badge-info',
+  issued: 'badge-success',
+  failed: 'badge-error',
+  storned: 'badge-warning',
+  cancelled: 'badge-neutral',
+};
+const isTerminal = invoice ? ['storned', 'cancelled'].includes(invoice.status) : false;
+---
+
+<AdminLayout title="Invoice" currentPath="/admin/plugins/invoicing" user={user}>
+  <div id="invoice-detail" class="col-span-12 p-6">
+    {
+      !invoice ? (
+        <div class="text-center py-8 text-error">Invoice not found</div>
+      ) : (
+        <div>
+          <div class="flex items-center justify-between mb-6">
+            <h1 class="text-2xl font-bold">Invoice {invoice.order_number}</h1>
+            <span
+              class={`badge text-lg px-3 py-2 ${statusColors[invoice.status] || 'badge-ghost'}`}
+            >
+              {invoice.status}
+            </span>
+          </div>
+        </div>
+      )
+    }
+  </div>
+</AdminLayout>
+
+<script define:vars={{ invoiceId: Astro.params.id }}>
+  var CODE_ID = invoiceId;
+
+  async function loadInvoice() {
+    try {
+      var res = await fetch('/api/plugins/invoicing/invoices/' + invoiceId);
+      var json = await res.json();
+      if (json.success) {
+        renderInvoice(json.data);
+      } else {
+        document.getElementById('invoice-detail').innerHTML =
+          '<div class="text-center py-8 text-error">Invoice not found</div>';
+      }
+    } catch (err) {
+      document.getElementById('invoice-detail').innerHTML =
+        '<div class="text-center py-8 text-error">Failed to load invoice: ' +
+        (err.message || 'unknown error') +
+        '</div>';
+    }
+  }
+
+  function statusColors() {
+    return {
+      received: 'badge-ghost',
+      pending: 'badge-info',
+      issued: 'badge-success',
+      failed: 'badge-error',
+      storned: 'badge-warning',
+      cancelled: 'badge-neutral',
+    };
+  }
+
+  function renderInvoice(inv) {
+    var colors = statusColors();
+    var isTerminal = inv.status === 'storned' || inv.status === 'cancelled';
+
+    var actions = '';
+    // Retry: only for failed invoices (re-emit)
+    if (inv.status === 'failed') {
+      actions +=
+        '<button class="btn btn-sm btn-primary" onclick="runAction(\'emit\')">Retry</button> ';
+    }
+    // Print / Storno / Cancel: only for issued invoices
+    if (inv.status === 'issued') {
+      actions +=
+        '<button class="btn btn-sm btn-outline" onclick="runAction(\'print\')">Print</button> ';
+      actions +=
+        '<button class="btn btn-sm btn-warning btn-outline" onclick="confirmAction(\'storno\')">Storno</button> ';
+      actions +=
+        '<button class="btn btn-sm btn-error btn-outline" onclick="confirmAction(\'cancel\')">Cancel</button> ';
+    }
+
+    // Invoice block
+    var html =
+      '<div class="flex justify-between items-start mb-6"><div><h1 class="text-2xl font-bold">Invoice ' +
+      inv.order_number +
+      '</h1><p class="text-sm text-gray-500">Order: ' +
+      inv.order_id +
+      ' · Provider: ' +
+      (inv.provider || '—') +
+      '</p></div>' +
+      '<div class="flex items-center gap-3"><span class="badge ' +
+      (colors[inv.status] || 'badge-ghost') +
+      ' text-lg px-3 py-2">' +
+      inv.status +
+      '</span></div></div>' +
+      (isTerminal ? '' : '<div class="flex gap-2 mb-6">' + actions + '</div>') +
+      (inv.error
+        ? '<div class="alert alert-error mb-4"><span>' + escapeHtml(inv.error) + '</span></div>'
+        : '') +
+      '<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">' +
+      '<div class="card bg-base-100 shadow"><div class="card-body"><h2 class="card-title text-lg">Invoice</h2>' +
+      '<p>Series/Number: <strong>' +
+      (inv.series ? inv.series + '/' + inv.number : '—') +
+      '</strong></p>' +
+      (inv.pdf_link
+        ? '<p>PDF: <a href="' +
+          escapeHtml(inv.pdf_link) +
+          '" target="_blank" rel="noopener" class="link link-primary">Open</a></p>'
+        : '') +
+      '<p>Issue date: ' +
+      (inv.issue_date ? new Date(inv.issue_date).toLocaleDateString() : '—') +
+      '</p>' +
+      '<p>Provider ref: ' +
+      (inv.provider_ref || '—') +
+      '</p></div></div>' +
+      '<div class="card bg-base-100 shadow"><div class="card-body"><h2 class="card-title text-lg">Order (snapshot)</h2>' +
+      renderOrder(inv.snapshot) +
+      '</div></div></div>';
+
+    document.getElementById('invoice-detail').innerHTML = html;
+  }
+
+  function renderOrder(snapshot) {
+    if (!snapshot) return '<p class="text-sm text-gray-500">No snapshot</p>';
+    var billTo = snapshot.billing || {};
+    var customer = snapshot.customer || {};
+    var itemRows = (snapshot.items || [])
+      .map(function (item) {
+        return (
+          '<tr><td>' +
+          escapeHtml(item.name) +
+          '</td><td>' +
+          (item.code || '—') +
+          '</td><td>' +
+          item.quantity +
+          '</td><td>' +
+          Number(item.unitPriceNet).toFixed(2) +
+          '</td><td>' +
+          Math.round((item.vatRate || 0) * 100) +
+          '%</td></tr>'
+        );
+      })
+      .join('');
+
+    return (
+      '<p class="text-sm"><strong>' +
+      escapeHtml(billTo.name || customer.name || '') +
+      '</strong></p>' +
+      (billTo.company ? '<p class="text-sm">' + escapeHtml(billTo.company) + '</p>' : '') +
+      (billTo.vatNumber ? '<p class="text-sm">VAT: ' + escapeHtml(billTo.vatNumber) + '</p>' : '') +
+      '<p class="text-sm">' +
+      escapeHtml(billTo.address || '') +
+      ', ' +
+      escapeHtml(billTo.city || '') +
+      ', ' +
+      escapeHtml(billTo.country || '') +
+      '</p>' +
+      '<table class="table table-sm mt-4"><thead><tr><th>Item</th><th>Code</th><th>Qty</th><th>Net</th><th>VAT</th></tr></thead>' +
+      '<tbody>' +
+      (itemRows || '<tr><td colspan="5">No items</td></tr>') +
+      '</tbody></table>' +
+      '<p class="font-bold text-lg mt-3">Total: ' +
+      (snapshot.totals && snapshot.totals.total !== undefined
+        ? Number(snapshot.totals.total).toFixed(2)
+        : '—') +
+      ' ' +
+      (snapshot.currency || '') +
+      '</p>'
+    );
+  }
+
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str === null || str === undefined ? '' : str));
+    return div.innerHTML;
+  }
+
+  window.runAction = async function (action) {
+    try {
+      var res = await fetch('/api/plugins/invoicing/invoices/' + CODE_ID + '/' + action, {
+        method: 'POST',
+      });
+      var json = await res.json();
+      if (json.success) {
+        loadInvoice();
+      } else {
+        alert(json.error || 'Action failed');
+      }
+    } catch (err) {
+      alert('Error: ' + (err.message || 'unknown'));
+    }
+  };
+
+  window.confirmAction = async function (action) {
+    if (!confirm('Are you sure you want to ' + action + ' this invoice?')) return;
+    await runAction(action);
+  };
+
+  loadInvoice();
+</script>

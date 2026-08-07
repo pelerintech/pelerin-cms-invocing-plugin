@@ -1,0 +1,43 @@
+---
+interface Props {
+  name: string;
+  label: string;
+  value?: string;
+  required?: boolean;
+  placeholder?: string;
+  rows?: number;
+  error?: string;
+}
+
+const {
+  name,
+  label,
+  value = '',
+  required = false,
+  placeholder = '',
+  rows = 24,
+  error = '',
+} = Astro.props;
+---
+
+<div class="form-control">
+  <label class="label">
+    <span class="label-text">
+      {label}{required && <span class="text-error ml-1">*</span>}
+    </span>
+  </label>
+  <textarea
+    id={name}
+    name={name}
+    placeholder={placeholder}
+    class={`textarea textarea-bordered w-full h-${rows} ${error ? 'textarea-error' : ''}`}
+    required={required}>{value}</textarea
+  >
+  {
+    error && (
+      <span class="text-error text-sm mt-1" data-field={name}>
+        {error}
+      </span>
+    )
+  }
+</div>

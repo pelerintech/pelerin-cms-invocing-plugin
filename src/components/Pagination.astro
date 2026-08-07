@@ -1,0 +1,90 @@
+---
+/**
+ * Pagination component — renders page buttons and Next/Prev links.
+ *
+ * @prop {number} total - Total number of items
+ * @prop {number} page - Current page number
+ * @prop {number} limit - Items per page
+ * @prop {string} baseUrl - Base URL for pagination links
+ */
+interface Props {
+  total: number;
+  page: number;
+  limit: number;
+  baseUrl?: string;
+}
+
+const { total, page, limit, baseUrl = '' } = Astro.props;
+const totalPages = Math.max(1, Math.ceil(total / limit));
+
+function pageUrl(p) {
+  return `${baseUrl}?page=${p}`;
+}
+
+// Generate page numbers to show (with ellipsis for large ranges)
+function getPageNumbers(current, total) {
+  const pages = [];
+  const delta = 2; // pages to show on each side
+
+  for (let i = 1; i <= total; i++) {
+    if (i === 1 || i === total || (i >= current - delta && i <= current + delta)) {
+      pages.push({ num: i, ellipsis: false });
+    } else if (pages[pages.length - 1].num !== i - 1) {
+      pages.push({ num: null, ellipsis: true });
+    }
+  }
+  return pages;
+}
+
+const pageNumbers = getPageNumbers(page, totalPages);
+---
+
+{
+  totalPages > 1 && (
+    <div class="flex justify-center items-center gap-2 mt-6">
+      {/* Prev button */}
+      {page > 1 && (
+        <a href={pageUrl(page - 1)} class="btn btn-sm">
+          ← Prev
+        </a>
+      )}
+      {page <= 1 && (
+        <button class="btn btn-sm btn-disabled" disabled>
+          ← Prev
+        </button>
+      )}
+
+      {/* Page numbers */}
+      <div class="flex gap-1">
+        {pageNumbers.map((p) => {
+          if (p.ellipsis) {
+            return <span class="btn btn-sm btn-disabled">…</span>;
+          }
+          const isActive = p.num === page;
+          return (
+            <a href={pageUrl(p.num)} class={`btn btn-sm ${isActive ? 'btn-primary' : 'btn-ghost'}`}>
+              {p.num}
+            </a>
+          );
+        })}
+      </div>
+
+      {/* Next button */}
+      {page < totalPages && (
+        <a href={pageUrl(page + 1)} class="btn btn-sm">
+          Next →
+        </a>
+      )}
+      {page >= totalPages && (
+        <button class="btn btn-sm btn-disabled" disabled>
+          Next →
+        </button>
+      )}
+
+      {/* Page info */}
+      <span class="text-sm text-base-content/50 ml-2">
+        Page {page} of {totalPages} ({total} total)
+      </span>
+    </div>
+  )
+}

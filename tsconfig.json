@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "moduleResolution": "bundler",
+    "module": "esnext",
+    "target": "es2022",
+    "lib": ["es2022", "dom", "dom.iterable"],
+    "types": ["node"],
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["**/*.astro", "node_modules", "tests"]
+}

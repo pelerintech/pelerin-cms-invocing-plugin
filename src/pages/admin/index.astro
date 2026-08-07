@@ -1,0 +1,190 @@
+---
+// Admin: Invoices list
+// Route: /admin/plugins/invoicing
+import AdminLayout from 'pelerin:admin-layout';
+import { createPluginContext } from 'pelerin:plugin-sdk';
+import { listInvoices } from '../../../lib/data/invoices.ts';
+
+const sdk = createPluginContext();
+const user = await sdk.auth.requireAdmin(Astro.request);
+
+const url = new URL(Astro.request.url);
+const filterStatus = url.searchParams.get('status') || '';
+const filterSearch = url.searchParams.get('search') || '';
+const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
+const limit = 20;
+
+const result = await listInvoices(sdk.db, {
+  search: filterSearch || undefined,
+  status: filterStatus || undefined,
+  page,
+  limit,
+});
+const invoiceList = result.data;
+const total = result.total;
+const totalPages = Math.max(1, Math.ceil(total / limit));
+
+function statusBadge(status: string): string {
+  const colors: Record<string, string> = {
+    received: 'badge-ghost',
+    pending: 'badge-info',
+    issued: 'badge-success',
+    failed: 'badge-error',
+    storned: 'badge-warning',
+    cancelled: 'badge-neutral',
+  };
+  return colors[status] || 'badge-ghost';
+}
+
+function statusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    received: 'Received',
+    pending: 'Pending',
+    issued: 'Issued',
+    failed: 'Failed',
+    storned: 'Storned',
+    cancelled: 'Cancelled',
+  };
+  return labels[status] || status;
+}
+
+function buildFilterParams(p: number): string {
+  const params = new URLSearchParams();
+  if (filterStatus) params.set('status', filterStatus);
+  if (filterSearch) params.set('search', filterSearch);
+  params.set('page', String(p));
+  return params.toString();
+}
+
+const hasFilters = filterStatus || filterSearch;
+---
+
+<AdminLayout title="Invoices" currentPath="/admin/plugins/invoicing" user={user}>
+  <div class="col-span-12">
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-bold">Invoices</h1>
+      <a href="/admin/plugins/invoicing/settings/providers" class="btn btn-outline btn-sm">
+        Provider Settings
+      </a>
+    </div>
+
+    <!-- Filters -->
+    <form method="GET" class="flex gap-4 mb-6 flex-wrap items-end">
+      <div class="form-control">
+        <label class="label"><span class="label-text">Status</span></label>
+        <select name="status" class="select select-bordered">
+          <option value="">All</option>
+          {
+            ['received', 'pending', 'issued', 'failed', 'storned', 'cancelled'].map((s) => (
+              <option value={s} selected={filterStatus === s}>
+                {statusLabel(s)}
+              </option>
+            ))
+          }
+        </select>
+      </div>
+      <div class="form-control flex-1 min-w-[200px]">
+        <label class="label"><span class="label-text">Search</span></label>
+        <input
+          type="text"
+          name="search"
+          value={filterSearch}
+          placeholder="Order number, customer, email..."
+          class="input input-bordered w-full"
+        />
+      </div>
+      <div class="form-control">
+        <label class="label"><span class="label-text opacity-0">&nbsp;</span></label>
+        <button type="submit" class="btn btn-outline">Filter</button>
+      </div>
+      {
+        hasFilters && (
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text opacity-0">&nbsp;</span>
+            </label>
+            <a href="/admin/plugins/invoicing" class="btn btn-ghost">
+              Clear
+            </a>
+          </div>
+        )
+      }
+    </form>
+
+    <!-- Invoices Table -->
+    {
+      invoiceList.length === 0 ? (
+        <p class="text-base-content/60">No invoices found.</p>
+      ) : (
+        <div class="overflow-x-auto">
+          <table class="table table-zebra w-full">
+            <thead>
+              <tr>
+                <th>Order #</th>
+                <th>Customer</th>
+                <th>Status</th>
+                <th>Provider</th>
+                <th>Series/Number</th>
+                <th>Issue Date</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {invoiceList.map((inv: any) => (
+                <tr>
+                  <td class="font-medium">
+                    <a
+                      href={`/admin/plugins/invoicing/invoices/${inv.id}`}
+                      class="link link-primary"
+                    >
+                      {inv.order_number}
+                    </a>
+                  </td>
+                  <td>
+                    {inv.customer_name}
+                    <br />
+                    <span class="text-xs text-base-content/50">{inv.customer_email}</span>
+                  </td>
+                  <td>
+                    <span class={`badge badge-sm ${statusBadge(inv.status)}`}>
+                      {statusLabel(inv.status)}
+                    </span>
+                  </td>
+                  <td>{inv.provider || '—'}</td>
+                  <td class="font-mono">
+                    {inv.series && inv.number ? `${inv.series}/${inv.number}` : '—'}
+                  </td>
+                  <td>{inv.issue_date ? new Date(inv.issue_date).toLocaleDateString() : '—'}</td>
+                  <td>
+                    <a
+                      href={`/admin/plugins/invoicing/invoices/${inv.id}`}
+                      class="btn btn-ghost btn-xs"
+                    >
+                      View
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+
+    <!-- Pagination -->
+    {
+      totalPages > 1 && (
+        <div class="join mt-4">
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+            <a
+              href={`/admin/plugins/invoicing?${buildFilterParams(p)}`}
+              class={`join-item btn btn-sm ${p === page ? 'btn-active' : ''}`}
+            >
+              {p}
+            </a>
+          ))}
+        </div>
+      )
+    }
+  </div>
+</AdminLayout>

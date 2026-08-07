@@ -1,0 +1,54 @@
+---
+interface Props {
+  name: string;
+  label: string;
+  value?: string;
+  required?: boolean;
+  placeholder?: string;
+  type?: string;
+  step?: string;
+  min?: string;
+  max?: string;
+  error?: string;
+}
+
+const {
+  name,
+  label,
+  value = '',
+  required = false,
+  placeholder = '',
+  type = 'text',
+  step,
+  min,
+  max,
+  error = '',
+} = Astro.props;
+---
+
+<div class="form-control">
+  <label class="label">
+    <span class="label-text">
+      {label}{required && <span class="text-error ml-1">*</span>}
+    </span>
+  </label>
+  <input
+    id={name}
+    type={type}
+    name={name}
+    value={value}
+    placeholder={placeholder}
+    class={`input input-bordered w-full ${error ? 'input-error' : ''}`}
+    required={required}
+    step={step || undefined}
+    min={min || undefined}
+    max={max || undefined}
+  />
+  {
+    error && (
+      <span class="text-error text-sm mt-1" data-field={name}>
+        {error}
+      </span>
+    )
+  }
+</div>

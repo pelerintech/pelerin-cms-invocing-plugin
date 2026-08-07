@@ -1,0 +1,70 @@
+{
+  "name": "pelerin_invoicing",
+  "displayName": "Invoicing",
+  "version": "1.0.0",
+  "dbConfig": "./src/db/schema.ts",
+  "dbSeed": "./src/db/seed.ts",
+  "init": "./src/init.ts",
+  "publicPages": [],
+  "adminPages": [
+    { "pattern": "/admin/plugins/invoicing", "entrypoint": "./src/pages/admin/index.astro" },
+    {
+      "pattern": "/admin/plugins/invoicing/invoices/[id]",
+      "entrypoint": "./src/pages/admin/invoices/[id].astro"
+    },
+    {
+      "pattern": "/admin/plugins/invoicing/settings/providers",
+      "entrypoint": "./src/pages/admin/settings/providers/index.astro"
+    },
+    {
+      "pattern": "/admin/plugins/invoicing/settings/providers/[name]",
+      "entrypoint": "./src/pages/admin/settings/providers/[name].astro"
+    }
+  ],
+  "apiEndpoints": [
+    {
+      "pattern": "/api/plugins/invoicing/invoices",
+      "entrypoint": "./src/api/invoicing/invoices/index.ts"
+    },
+    {
+      "pattern": "/api/plugins/invoicing/invoices/[id]",
+      "entrypoint": "./src/api/invoicing/invoices/[id]/index.ts"
+    },
+    {
+      "pattern": "/api/plugins/invoicing/invoices/[id]/emit",
+      "entrypoint": "./src/api/invoicing/invoices/[id]/emit.ts"
+    },
+    {
+      "pattern": "/api/plugins/invoicing/invoices/[id]/print",
+      "entrypoint": "./src/api/invoicing/invoices/[id]/print.ts"
+    },
+    {
+      "pattern": "/api/plugins/invoicing/invoices/[id]/storno",
+      "entrypoint": "./src/api/invoicing/invoices/[id]/storno.ts"
+    },
+    {
+      "pattern": "/api/plugins/invoicing/invoices/[id]/cancel",
+      "entrypoint": "./src/api/invoicing/invoices/[id]/cancel.ts"
+    },
+    {
+      "pattern": "/api/plugins/invoicing/providers",
+      "entrypoint": "./src/api/invoicing/providers/index.ts"
+    },
+    {
+      "pattern": "/api/plugins/invoicing/providers/[name]/settings",
+      "entrypoint": "./src/api/invoicing/providers/[name]/settings.ts"
+    },
+    {
+      "pattern": "/api/plugins/invoicing/public/invoices/download",
+      "entrypoint": "./src/api/invoicing/public/invoices/download.ts"
+    }
+  ],
+  "navItems": [
+    { "label": "Invoices", "href": "/admin/plugins/invoicing", "icon": "receipt" },
+    {
+      "label": "Providers",
+      "href": "/admin/plugins/invoicing/settings/providers",
+      "icon": "server"
+    }
+  ]
+}
