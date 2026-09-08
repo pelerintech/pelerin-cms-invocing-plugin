@@ -3,7 +3,7 @@
 // Route: /admin/plugins/invoicing
 import AdminLayout from 'pelerin:admin-layout';
 import { createPluginContext } from 'pelerin:plugin-sdk';
-import { listInvoices } from '../../../lib/data/invoices.ts';
+import { listInvoices } from '../../lib/data/invoices.ts';
 
 const sdk = createPluginContext();
 const user = await sdk.auth.requireAdmin(Astro.request);
