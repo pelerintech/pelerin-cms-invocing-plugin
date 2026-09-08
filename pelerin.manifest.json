@@ -1,5 +1,5 @@
 {
-  "name": "pelerin_invoicing",
+  "name": "invoicing_plugin",
   "displayName": "Invoicing",
   "version": "1.0.0",
   "dbConfig": "./src/db/schema.ts",

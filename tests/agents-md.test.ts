@@ -34,7 +34,7 @@ test('AGENTS.md contains all mandatory convention markers', () => {
 
 test('AGENTS.md identifies the plugin as a generic invoicing plugin with providers', () => {
   assert.ok(
-    content.includes('pelerin_invoicing') || content.includes('invoicing plugin'),
+    content.includes('invoicing_plugin') || content.includes('invoicing plugin'),
     'AGENTS.md must identify the invoicing plugin'
   );
 });

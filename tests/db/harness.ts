@@ -1,5 +1,5 @@
 /**
- * Real-SQLite test harness for the pelerin_invoicing data accessors.
+ * Real-SQLite test harness for the invoicing_plugin data accessors.
  *
  * Spins up an in-memory libSQL database, creates all plugin tables from
  * `src/db/schema.ts` (the pure-Drizzle schema), and returns a

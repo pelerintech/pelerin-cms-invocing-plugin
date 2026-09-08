@@ -17,7 +17,7 @@ test('manifest exists and is valid JSON', () => {
 
 test('manifest carries the plugin identity', () => {
   const parsed = JSON.parse(readFileSync(manifestPath, 'utf-8'));
-  assert.strictEqual(parsed.name, 'pelerin_invoicing');
+  assert.strictEqual(parsed.name, 'invoicing_plugin');
   assert.strictEqual(parsed.displayName, 'Invoicing');
   assert.strictEqual(parsed.version, '1.0.0');
 });
@@ -93,7 +93,7 @@ test('navItems has Invoices and Providers under the invoicing namespace', () => 
 
 test('identity fields unchanged', () => {
   const parsed = JSON.parse(readFileSync(manifestPath, 'utf-8'));
-  assert.strictEqual(parsed.name, 'pelerin_invoicing');
+  assert.strictEqual(parsed.name, 'invoicing_plugin');
   assert.strictEqual(parsed.displayName, 'Invoicing');
   assert.strictEqual(parsed.version, '1.0.0');
   assert.strictEqual(parsed.dbConfig, './src/db/schema.ts');

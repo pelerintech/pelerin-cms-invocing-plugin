@@ -1,6 +1,6 @@
-# AGENTS.md — pelerin_invoicing
+# AGENTS.md — invoicing_plugin
 
-This document is the single source of truth for AI agents working on the `pelerin_invoicing` plugin. Read it in full before modifying code.
+This document is the single source of truth for AI agents working on the `invoicing_plugin` plugin. Read it in full before modifying code.
 
 > **Scaffold status: SUPERSEDED.** The `2026-08-06-invoicing-core` request landed the core feature set: the `invoices` + `invoicing_settings` tables, data accessors, the provider interface/registry with the FGO adapter, `init` event-subscriber wiring (`shop.order.invoice` → ingestion), admin API handlers, and the four admin pages. The patterns below are the landed contract — follow them for all future feature work.
 
@@ -8,7 +8,7 @@ This document is the single source of truth for AI agents working on the `peleri
 
 ## 1. What this project is
 
-`pelerin_invoicing` is a **Pelerin CMS plugin**. It does not run standalone. It is attached to a Pelerin CMS instance (symlinked into the CMS's `plugins/pelerin_invoicing/` directory and loaded at build time by Pelerin's plugin system).
+`invoicing_plugin` is a **Pelerin CMS plugin**. It does not run standalone. It is attached to a Pelerin CMS instance (symlinked into the CMS's `plugins/invoicing_plugin/` directory and loaded at build time by Pelerin's plugin system).
 
 It is a **generic invoicing plugin**: it consumes order lifecycle events from the ecommerce plugin and emits invoices in an external invoicing system behind a pluggable provider interface. External systems (FGO first, then SmartBill/Oblio) sit behind `src/providers/invoicing/`.
 
@@ -18,7 +18,7 @@ The CMS repo lives at `../pelerin_cms/`. Sibling plugins `../ecomm_plugin/` and 
 
 - Generic invoicing plugin with a provider abstraction; FGO is the first provider (landed).
 - Self-contained and event-driven — consumes self-contained order payloads; never queries shop tables directly (no cross-plugin DB access).
-- Name / URL namespace: `pelerin_invoicing`, `/admin/plugins/invoicing`, `/api/plugins/invoicing`.
+- Name / URL namespace: `invoicing_plugin`, `/admin/plugins/invoicing`, `/api/plugins/invoicing`.
 
 ---
 
@@ -28,7 +28,7 @@ The end-state flow:
 
 ```
 ┌─────────────┐  order lifecycle  ┌───────────────────┐  provider   ┌─────────────┐
-│ ecomm_plugin│─────event────────▶│ pelerin_invoicing │────call────▶│ invoicing   │
+│ ecomm_plugin│─────event────────▶│ invoicing_plugin │────call────▶│ invoicing   │
 │  (orders)   │                   │  stores invoice,  │◀──invoice───│ system      │
 └─────────────┘                   │  admin table view │             │ (FGO first) │
                                   └───────────────────┘             └─────────────┘
@@ -42,7 +42,7 @@ Invoices are stored locally and displayed in an admin table filtered by order. *
 
 `pelerin.manifest.json` is the plugin contract. It is wired for the landed feature:
 
-- `name: pelerin_invoicing`, `displayName: "Invoicing"`, `version: 1.0.0`
+- `name: invoicing_plugin`, `displayName: "Invoicing"`, `version: 1.0.0`
 - `dbConfig: ./src/db/schema.ts`, `dbSeed: ./src/db/seed.ts`, `init: ./src/init.ts`
 - `adminPages` — the 4 admin pages (`/admin/plugins/invoicing`, `invoices/[id]`, `settings/providers`, `settings/providers/[name]`)
 - `apiEndpoints` — invoices list/detail, the 4 actions (emit/print/storno/cancel), providers list, provider settings

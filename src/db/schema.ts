@@ -1,5 +1,5 @@
 /**
- * Pure Drizzle schema for the pelerin_invoicing plugin.
+ * Pure Drizzle schema for the invoicing_plugin plugin.
  *
  * This is the sole schema definition. The CMS loads it via the manifest's
  * `dbConfig` and merges the `sqliteTable` exports at build time.

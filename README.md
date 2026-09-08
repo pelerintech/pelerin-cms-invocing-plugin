@@ -21,14 +21,14 @@ This plugin is installed into a running Pelerin CMS instance. The CMS resolves p
 For local development, symlink the repo into the CMS plugins directory:
 
 ```bash
-ln -s /path/to/this/repo /path/to/pelerin_cms/plugins/pelerin_invoicing
+ln -s /path/to/this/repo /path/to/pelerin_cms/plugins/invoicing_plugin
 ```
 
 Then register it in the CMS's `pelerin.config.mjs` (this file is gitignored in the CMS):
 
 ```js
 export default {
-  plugins: [{ name: 'pelerin_invoicing', source: 'local' }],
+  plugins: [{ name: 'invoicing_plugin', source: 'local' }],
 };
 ```
 

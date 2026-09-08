@@ -7,10 +7,10 @@ const readmePath = resolve(import.meta.dirname, '../README.md');
 const content = readFileSync(readmePath, 'utf-8');
 
 const requiredSnippets = [
-  'pelerin_invoicing',
+  'invoicing_plugin',
   '## Installation',
   '## Available scripts',
-  "{ name: 'pelerin_invoicing', source: 'local' }",
+  "{ name: 'invoicing_plugin', source: 'local' }",
 ];
 
 test('README.md exists', () => {
@@ -31,7 +31,7 @@ test('README.md states the scaffold-only status', () => {
 
 test('README.md documents the CMS registration (symlink capture)', () => {
   assert.ok(
-    content.includes('plugins/pelerin_invoicing'),
+    content.includes('plugins/invoicing_plugin'),
     'README must reference the CMS plugin directory'
   );
 });
