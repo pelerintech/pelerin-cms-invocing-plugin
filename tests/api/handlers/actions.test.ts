@@ -6,7 +6,7 @@ import { createTestDb } from '../../db/harness.ts';
 import { createInvoice, setInvoiceStatus, getInvoiceById } from '../../../src/lib/data/invoices.ts';
 import { registerProvider } from '../../../src/providers/invoicing/registry.ts';
 import type { InvoicingProvider } from '../../../src/providers/invoicing/interface.ts';
-import type { OrderInvoicePayload } from '../../../src/lib/order-payload.ts';
+import { orderData } from '../../fixtures/order-data.ts';
 
 ensureLoader();
 const emit = await import('../../../src/api/invoicing/invoices/[id]/emit.ts');
@@ -25,16 +25,8 @@ const stubProvider: InvoicingProvider = {
 };
 registerProvider(stubProvider);
 
-function payload(orderId: string): OrderInvoicePayload {
-  return {
-    orderId,
-    orderNumber: 'ORD-1',
-    currency: 'RON',
-    customer: { name: 'Ana', email: 'ana@x.ro' },
-    billing: { name: 'Ana', email: 'ana@x.ro', address: 'X', city: 'B', country: 'RO' },
-    items: [{ name: 'Widget', quantity: 1, unitPriceNet: 100, vatRate: 0.19, vatIncluded: false }],
-    totals: { currency: 'RON', subtotalNet: 100, vatTotal: 19, total: 119 },
-  };
+function payload(orderId: string): ReturnType<typeof orderData> {
+  return orderData({ orderId });
 }
 
 async function failedInvoice(db: any, orderId: string): Promise<string> {

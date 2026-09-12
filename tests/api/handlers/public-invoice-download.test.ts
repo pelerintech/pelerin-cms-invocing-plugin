@@ -4,22 +4,13 @@ import { ensureLoader } from '../../stubs/register.mjs';
 import { makeFakeSdk, makeCtx } from '../helpers.ts';
 import { createTestDb } from '../../db/harness.ts';
 import { createInvoice, setInvoiceStatus } from '../../../src/lib/data/invoices.ts';
-import type { OrderInvoicePayload } from '../../../src/lib/order-payload.ts';
+import { orderData } from '../../fixtures/order-data.ts';
 
 ensureLoader();
 const { runGet } = await import('../../../src/api/invoicing/public/invoices/download.ts');
 
-function payload(orderId: string, userId: string): OrderInvoicePayload {
-  return {
-    orderId,
-    orderNumber: `ORD-${orderId}`,
-    currency: 'RON',
-    userId,
-    customer: { name: 'Ana', email: 'ana@x.ro' },
-    billing: { name: 'Ana', email: 'ana@x.ro', address: 'X', city: 'B', country: 'RO' },
-    items: [{ name: 'Widget', quantity: 1, unitPriceNet: 100, vatRate: 0.19, vatIncluded: false }],
-    totals: { currency: 'RON', subtotalNet: 100, vatTotal: 19, total: 119 },
-  };
+function payload(orderId: string, userId: string): ReturnType<typeof orderData> {
+  return orderData({ orderId, userId });
 }
 
 function url(userId: string, orderId: string): string {

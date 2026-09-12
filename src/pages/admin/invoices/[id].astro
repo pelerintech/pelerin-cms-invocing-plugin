@@ -135,23 +135,27 @@ const isTerminal = invoice ? ['storned', 'cancelled'].includes(invoice.status) :
     document.getElementById('invoice-detail').innerHTML = html;
   }
 
+  // The stored snapshot is the ecomm order `data`: { order, billing_address, items }.
+  // Money is in minor units (bani/cents); divide by 100 for major display.
   function renderOrder(snapshot) {
     if (!snapshot) return '<p class="text-sm text-gray-500">No snapshot</p>';
-    var billTo = snapshot.billing || {};
-    var customer = snapshot.customer || {};
+    var order = snapshot.order || {};
+    var addr = snapshot.billing_address || {};
+    var fullName = [addr.first_name, addr.last_name].filter(Boolean).join(' ');
+    var billingName = addr.company || fullName || order.customer_name || '';
     var itemRows = (snapshot.items || [])
       .map(function (item) {
         return (
           '<tr><td>' +
-          escapeHtml(item.name) +
+          escapeHtml(item.product_name) +
           '</td><td>' +
-          (item.code || '—') +
+          (item.sku || '—') +
           '</td><td>' +
           item.quantity +
           '</td><td>' +
-          Number(item.unitPriceNet).toFixed(2) +
+          Number(item.price_net / 100).toFixed(2) +
           '</td><td>' +
-          Math.round((item.vatRate || 0) * 100) +
+          Math.round((item.vat_rate || 0) * 100) +
           '%</td></tr>'
         );
       })
@@ -159,27 +163,30 @@ const isTerminal = invoice ? ['storned', 'cancelled'].includes(invoice.status) :
 
     return (
       '<p class="text-sm"><strong>' +
-      escapeHtml(billTo.name || customer.name || '') +
+      escapeHtml(billingName) +
       '</strong></p>' +
-      (billTo.company ? '<p class="text-sm">' + escapeHtml(billTo.company) + '</p>' : '') +
-      (billTo.vatNumber ? '<p class="text-sm">VAT: ' + escapeHtml(billTo.vatNumber) + '</p>' : '') +
+      (addr.company ? '<p class="text-sm">' + escapeHtml(addr.company) + '</p>' : '') +
+      (addr.vat_number ? '<p class="text-sm">VAT: ' + escapeHtml(addr.vat_number) + '</p>' : '') +
       '<p class="text-sm">' +
-      escapeHtml(billTo.address || '') +
+      escapeHtml(addr.address || '') +
       ', ' +
-      escapeHtml(billTo.city || '') +
+      escapeHtml(addr.city || '') +
       ', ' +
-      escapeHtml(billTo.country || '') +
+      escapeHtml(addr.country || '') +
+      '</p>' +
+      '<p class="text-sm">Order: ' +
+      escapeHtml(order.order_number || '') +
       '</p>' +
       '<table class="table table-sm mt-4"><thead><tr><th>Item</th><th>Code</th><th>Qty</th><th>Net</th><th>VAT</th></tr></thead>' +
       '<tbody>' +
       (itemRows || '<tr><td colspan="5">No items</td></tr>') +
       '</tbody></table>' +
       '<p class="font-bold text-lg mt-3">Total: ' +
-      (snapshot.totals && snapshot.totals.total !== undefined
-        ? Number(snapshot.totals.total).toFixed(2)
+      (order.total !== undefined && order.total !== null
+        ? Number(order.total / 100).toFixed(2)
         : '—') +
       ' ' +
-      (snapshot.currency || '') +
+      escapeHtml(order.currency || '') +
       '</p>'
     );
   }

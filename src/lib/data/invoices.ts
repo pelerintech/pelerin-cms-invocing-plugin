@@ -1,7 +1,7 @@
 import { eq, and, desc, like, or, count } from 'drizzle-orm';
 import type { LibSQLDatabase } from 'drizzle-orm/libsql';
 import { invoices } from '../../db/schema.ts';
-import { parseSnapshot, type OrderInvoicePayload } from '../order-payload.ts';
+import { parseSnapshot, billingName, type OrderInvoicePayload } from '../order-payload.ts';
 
 /** An invoice row as returned by accessors, with the snapshot parsed. */
 export interface InvoiceRow {
@@ -54,10 +54,10 @@ export async function createInvoice(
   const row = {
     id: crypto.randomUUID(),
     order_id: orderId,
-    order_number: payload.orderNumber,
-    customer_name: payload.customer?.name ?? payload.billing.name,
-    customer_email: (payload.customer?.email ?? payload.billing.email) || null,
-    user_id: payload.userId ?? null,
+    order_number: payload.order.order_number,
+    customer_name: billingName(payload.billing_address, payload.order),
+    customer_email: payload.order.customer_email || null,
+    user_id: payload.order.user_id ?? null,
     status: 'received',
     provider: provider ?? null,
     snapshot_json: JSON.stringify(payload),

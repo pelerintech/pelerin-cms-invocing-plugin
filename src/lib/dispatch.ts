@@ -85,7 +85,7 @@ export async function ingestInvoice(
   providerOverride?: InvoicingProvider,
   opts: IngestOptions = {}
 ): Promise<IngestResult> {
-  const orderId = payload.orderId;
+  const orderId = payload.order.id;
   const providerName = opts.providerName ?? providerOverride?.name ?? 'fgo';
   const provider = providerOverride ?? getProvider(providerName);
   if (!provider) {

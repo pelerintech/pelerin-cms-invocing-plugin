@@ -11,32 +11,22 @@ import {
   type InvoiceRow,
 } from '../../src/lib/data/invoices.ts';
 import { invoices } from '../../src/db/schema.ts';
-import type { OrderInvoicePayload } from '../../src/lib/order-payload.ts';
+import { orderData } from '../fixtures/order-data.ts';
 
 let db: any;
 
-function samplePayload(overrides: Partial<OrderInvoicePayload> = {}): OrderInvoicePayload {
-  return {
+function samplePayload(
+  overrides: Parameters<typeof orderData>[0] = {}
+): ReturnType<typeof orderData> {
+  return orderData({
     orderId: 'order-1',
     orderNumber: 'ORD-100',
-    currency: 'RON',
-    customer: { name: 'Ana Popescu', email: 'ana@example.com', phone: '0711' },
-    billing: {
-      name: 'Ana Popescu',
-      address: 'Str. X 1',
-      city: 'Bucuresti',
-      county: 'B',
-      country: 'RO',
-      email: 'ana@example.com',
-      phone: '0711',
-    },
-    items: [
-      { name: 'Widget', quantity: 2, unitPriceNet: 100, vatRate: 0.19, vatIncluded: false },
-      { name: 'Gadget', quantity: 1, unitPriceNet: 50, vatRate: 0.19, vatIncluded: false },
-    ],
-    totals: { currency: 'RON', subtotalNet: 250, vatTotal: 47.5, total: 297.5 },
+    customerEmail: 'ana@example.com',
+    // PF billing so the derived customer_name is the person's full name.
+    company: null,
+    customerName: 'Ana Popescu',
     ...overrides,
-  };
+  });
 }
 
 describe('invoice accessors', () => {
@@ -58,8 +48,8 @@ describe('invoice accessors', () => {
     assert.equal(row.provider, 'fgo');
     assert.ok(row.created_at instanceof Date);
     // snapshot round-trips
-    assert.equal(row.snapshot.orderId, 'order-1');
-    assert.equal(row.snapshot.items.length, 2);
+    assert.equal(row.snapshot.order.id, 'order-1');
+    assert.equal(row.snapshot.items.length, 1);
   });
 
   test('the raw snapshot_json column stores the parsed payload as JSON', async () => {
@@ -70,8 +60,8 @@ describe('invoice accessors', () => {
     });
     const raw = await db.select().from(invoices).where(eq(invoices.id, created.id));
     const parsed = JSON.parse(raw[0].snapshot_json);
-    assert.equal(parsed.orderId, 'order-1');
-    assert.equal(parsed.currency, 'RON');
+    assert.equal(parsed.order.id, 'order-1');
+    assert.equal(parsed.order.currency, 'RON');
   });
 
   test('a second insert for the same order_id is blocked by the unique constraint', async () => {
@@ -136,27 +126,19 @@ describe('invoice accessors', () => {
     // insert with distinct created_at timestamps so newest-first ordering is deterministic
     await createInvoice(db, {
       orderId: 'o-1',
-      payload: samplePayload({ orderId: 'o-1', orderNumber: 'ORD-1', customer: { name: 'Ana' } }),
+      payload: samplePayload({ orderId: 'o-1', orderNumber: 'ORD-1', company: 'Ana' }),
       provider: 'fgo',
     });
     await new Promise((r) => setTimeout(r, 10));
     await createInvoice(db, {
       orderId: 'o-2',
-      payload: samplePayload({
-        orderId: 'o-2',
-        orderNumber: 'ORD-2',
-        customer: { name: 'Bogdan' },
-      }),
+      payload: samplePayload({ orderId: 'o-2', orderNumber: 'ORD-2', company: 'Bogdan' }),
       provider: 'fgo',
     });
     await new Promise((r) => setTimeout(r, 10));
     await createInvoice(db, {
       orderId: 'o-3',
-      payload: samplePayload({
-        orderId: 'o-3',
-        orderNumber: 'ORD-3',
-        customer: { name: 'Cristi' },
-      }),
+      payload: samplePayload({ orderId: 'o-3', orderNumber: 'ORD-3', company: 'Cristi' }),
       provider: 'fgo',
     });
 
@@ -196,7 +178,8 @@ describe('invoice accessors', () => {
       payload: samplePayload({
         orderId: 'o-1',
         orderNumber: 'ORD-100',
-        customer: { name: 'Ana Popescu', email: 'ana@x.ro' },
+        company: 'Ana Popescu',
+        customerEmail: 'ana@x.ro',
       }),
       provider: 'fgo',
     });
@@ -205,7 +188,8 @@ describe('invoice accessors', () => {
       payload: samplePayload({
         orderId: 'o-2',
         orderNumber: 'ORD-200',
-        customer: { name: 'Bogdan', email: 'bob@y.ro' },
+        company: 'Bogdan',
+        customerEmail: 'bob@y.ro',
       }),
       provider: 'fgo',
     });
@@ -230,6 +214,6 @@ describe('invoice accessors', () => {
     const all = await listInvoices(db, { page: 1, limit: 20 });
     assert.equal(all.data.length, 1);
     assert.ok((all.data[0] as InvoiceRow).snapshot);
-    assert.equal(all.data[0].snapshot.orderId, 'o-1');
+    assert.equal(all.data[0].snapshot.order.id, 'o-1');
   });
 });

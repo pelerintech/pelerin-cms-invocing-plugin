@@ -4,7 +4,7 @@ import { ensureLoader } from '../../stubs/register.mjs';
 import { makeFakeSdk, makeCtx, poisonDb, unauthorizedError } from '../helpers.ts';
 import { createTestDb } from '../../db/harness.ts';
 import { createInvoice, setInvoiceStatus } from '../../../src/lib/data/invoices.ts';
-import type { OrderInvoicePayload } from '../../../src/lib/order-payload.ts';
+import { orderData } from '../../fixtures/order-data.ts';
 
 ensureLoader();
 const { runGet } = await import('../../../src/api/invoicing/invoices/index.ts');
@@ -14,16 +14,10 @@ function payload(
   name: string,
   email: string,
   number: string
-): OrderInvoicePayload {
-  return {
-    orderId,
-    orderNumber: number,
-    currency: 'RON',
-    customer: { name, email },
-    billing: { name, email, address: 'X', city: 'B', country: 'RO' },
-    items: [{ name: 'Widget', quantity: 1, unitPriceNet: 100, vatRate: 0.19, vatIncluded: false }],
-    totals: { currency: 'RON', subtotalNet: 100, vatTotal: 19, total: 119 },
-  };
+): ReturnType<typeof orderData> {
+  // company=name so the row's customer_name (derived from the billing address)
+  // matches the display name the search test filters on.
+  return orderData({ orderId, orderNumber: number, customerEmail: email, company: name });
 }
 
 describe('runGet (invoices index)', () => {

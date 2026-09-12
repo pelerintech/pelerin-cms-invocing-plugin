@@ -9,20 +9,12 @@ import {
   cancelInvoice,
 } from '../../src/lib/action-runner.ts';
 import type { InvoicingProvider } from '../../src/providers/invoicing/interface.ts';
-import type { OrderInvoicePayload } from '../../src/lib/order-payload.ts';
+import { orderData } from '../fixtures/order-data.ts';
 
 let db: any;
 
-function payload(orderId: string): OrderInvoicePayload {
-  return {
-    orderId,
-    orderNumber: `ORD-${orderId}`,
-    currency: 'RON',
-    customer: { name: 'Ana', email: 'ana@x.ro' },
-    billing: { name: 'Ana', address: 'X', city: 'B', country: 'RO' },
-    items: [{ name: 'Widget', quantity: 1, unitPriceNet: 100, vatRate: 0.19, vatIncluded: false }],
-    totals: { currency: 'RON', subtotalNet: 100, vatTotal: 19, total: 119 },
-  };
+function payload(orderId: string): ReturnType<typeof orderData> {
+  return orderData({ orderId });
 }
 
 interface Stub {

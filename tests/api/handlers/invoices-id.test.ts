@@ -4,21 +4,13 @@ import { ensureLoader } from '../../stubs/register.mjs';
 import { makeFakeSdk, makeCtx, poisonDb, unauthorizedError } from '../helpers.ts';
 import { createTestDb } from '../../db/harness.ts';
 import { createInvoice } from '../../../src/lib/data/invoices.ts';
-import type { OrderInvoicePayload } from '../../../src/lib/order-payload.ts';
+import { orderData } from '../../fixtures/order-data.ts';
 
 ensureLoader();
 const { runGet } = await import('../../../src/api/invoicing/invoices/[id]/index.ts');
 
-function payload(orderId: string): OrderInvoicePayload {
-  return {
-    orderId,
-    orderNumber: 'ORD-1',
-    currency: 'RON',
-    customer: { name: 'Ana', email: 'ana@x.ro' },
-    billing: { name: 'Ana', email: 'ana@x.ro', address: 'X', city: 'B', country: 'RO' },
-    items: [{ name: 'Widget', quantity: 1, unitPriceNet: 100, vatRate: 0.19, vatIncluded: false }],
-    totals: { currency: 'RON', subtotalNet: 100, vatTotal: 19, total: 119 },
-  };
+function payload(orderId: string): ReturnType<typeof orderData> {
+  return orderData({ orderId });
 }
 
 describe('runGet (invoices/[id])', () => {
@@ -47,7 +39,7 @@ describe('runGet (invoices/[id])', () => {
       const body = await res.json();
       assert.equal(body.success, true);
       assert.equal(body.data.id, created.id);
-      assert.equal(body.data.snapshot.orderId, 'o-1');
+      assert.equal(body.data.snapshot.order.id, 'o-1');
       assert.equal(body.data.snapshot.items.length, 1);
     } finally {
       await t.cleanup();

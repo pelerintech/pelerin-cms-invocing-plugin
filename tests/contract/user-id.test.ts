@@ -4,21 +4,10 @@ import { createTestDb } from '../db/harness.ts';
 import { createInvoice, getInvoiceByOrder } from '../../src/lib/data/invoices.ts';
 import { ingestInvoice } from '../../src/lib/dispatch.ts';
 import { parseSnapshot, type OrderInvoicePayload } from '../../src/lib/order-payload.ts';
+import { orderData } from '../fixtures/order-data.ts';
 
-function payload(
-  orderId: string,
-  overrides: Partial<OrderInvoicePayload> = {}
-): OrderInvoicePayload {
-  return {
-    orderId,
-    orderNumber: `ORD-${orderId}`,
-    currency: 'RON',
-    customer: { name: 'Ana', email: 'ana@x.ro' },
-    billing: { name: 'Ana', address: 'X', city: 'B', country: 'RO' },
-    items: [{ name: 'Widget', quantity: 1, unitPriceNet: 100, vatRate: 0.19, vatIncluded: false }],
-    totals: { currency: 'RON', subtotalNet: 100, vatTotal: 19, total: 119 },
-    ...overrides,
-  };
+function payload(orderId: string, overrides: { userId?: string | null } = {}): OrderInvoicePayload {
+  return orderData({ orderId, ...overrides });
 }
 
 function stubProvider() {
@@ -33,26 +22,18 @@ function stubProvider() {
 }
 
 describe('ownership contract — user_id on payload, column, and ingestion', () => {
-  test('OrderInvoicePayload carries an optional userId field', () => {
-    const p: OrderInvoicePayload = {
-      orderId: 'o-1',
-      orderNumber: 'ORD-1',
-      currency: 'RON',
-      userId: 'u-1',
-      customer: { name: 'Ana' },
-      billing: { name: 'Ana', address: 'X', city: 'B', country: 'RO' },
-      items: [],
-    };
-    assert.equal(p.userId, 'u-1');
+  test('OrderInvoicePayload carries an optional userId field on order', () => {
+    const p: OrderInvoicePayload = orderData({ orderId: 'o-1', userId: 'u-1' });
+    assert.equal(p.order.user_id, 'u-1');
   });
 
   test('parseSnapshot round-trips userId unchanged', () => {
     const raw = JSON.stringify(payload('o-1', { userId: 'u-9' }));
     const parsed = parseSnapshot(raw);
-    assert.equal(parsed.userId, 'u-9');
+    assert.equal(parsed.order.user_id, 'u-9');
   });
 
-  test('createInvoice persists user_id from payload.userId', async () => {
+  test('createInvoice persists user_id from payload.order.user_id', async () => {
     const t = await createTestDb();
     try {
       const created = await createInvoice(t.db, {
@@ -86,7 +67,7 @@ describe('ownership contract — user_id on payload, column, and ingestion', () 
     }
   });
 
-  test('ingestInvoice persists user_id from payload.userId', async () => {
+  test('ingestInvoice persists user_id from payload.order.user_id', async () => {
     const t = await createTestDb();
     try {
       const res = await ingestInvoice(

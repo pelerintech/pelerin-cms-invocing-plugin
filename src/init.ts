@@ -14,13 +14,20 @@ import { ingestInvoice } from './lib/dispatch.ts';
 import type { OrderInvoicePayload } from './lib/order-payload.ts';
 import type { LibSQLDatabase } from 'drizzle-orm/libsql';
 
+/** The bus-delivered envelope: `{ event, timestamp, data }`. */
+interface BusPayload {
+  event: string;
+  timestamp: string;
+  data: unknown;
+}
+
 /** Minimal plugin-init context: only what init consumes. */
 interface InitContext {
   db: LibSQLDatabase;
   events: {
     subscribe(
       event: string,
-      handler: (payload: Record<string, unknown>) => void | Promise<void>
+      handler: (event: string, payload: BusPayload) => void | Promise<void>
     ): () => void;
   };
 }
@@ -32,15 +39,16 @@ export default function init(ctx: InitContext): void {
     return;
   }
 
-  ctx.events.subscribe('shop.order.invoice', async (data) => {
+  ctx.events.subscribe('shop.order.invoice', async (event, payload) => {
     try {
-      const payload =
-        data?.payload ?? (data as { event?: { payload?: unknown } })?.event?.payload ?? data;
-      if (!payload || typeof payload !== 'object') {
-        console.warn('[invoicing] Received shop.order.invoice without a payload');
+      // The bus delivers a self-contained envelope; the invoice payload is its
+      // `data` node. No payload/event.payload heuristic — the contract is fixed.
+      const data = payload?.data;
+      if (!data || typeof data !== 'object') {
+        console.warn('[invoicing] Received shop.order.invoice without data');
         return;
       }
-      await ingestInvoice(ctx.db, payload as unknown as OrderInvoicePayload);
+      await ingestInvoice(ctx.db, data as unknown as OrderInvoicePayload);
     } catch (err) {
       // Never crash the event bus.
       console.error('[invoicing] Error processing shop.order.invoice:', err);
