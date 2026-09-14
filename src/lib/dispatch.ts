@@ -16,7 +16,14 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql';
 import type { InvoicingProvider, CreateResult } from '../providers/invoicing/interface.ts';
 import { getProvider } from '../providers/invoicing/registry.ts';
 import { buildInvoiceDraft } from '../providers/invoicing/draft.ts';
-import { createInvoice, getInvoiceByOrder, setInvoiceStatus } from './data/invoices.ts';
+import {
+  createInvoice,
+  getInvoiceById,
+  getInvoiceByOrder,
+  setInvoiceStatus,
+} from './data/invoices.ts';
+import { captureRequest } from './dev-capture.ts';
+import { isDevMode } from './dev-mode.ts';
 import type { OrderInvoicePayload } from './order-payload.ts';
 import '../providers/invoicing/fgo.ts'; // auto-register the default provider
 
@@ -33,6 +40,8 @@ export interface IngestResult {
   id: string | null;
   reprocessed: boolean;
   error?: string;
+  /** The captured log id when dev mode parked the request. */
+  logId?: string;
 }
 
 const TERMINAL = new Set(['issued', 'storned', 'cancelled']);
@@ -45,14 +54,29 @@ async function emitInvoice(
   providerName: string,
   provider: InvoicingProvider,
   opts: IngestOptions
-): Promise<string> {
+): Promise<IngestResult> {
+  const draft = buildInvoiceDraft(payload, { issueDate: opts.issueDate });
+
+  // Dev mode: capture the would-be request and park, no provider call,
+  // no state advance (the invoice stays in its non-terminal starting state).
+  if (isDevMode()) {
+    const current = await getInvoiceById(db, invoiceId);
+    const log = await captureRequest(db, {
+      invoiceId,
+      operation: 'emit',
+      provider: providerName,
+      requestJson: draft,
+      fromStatus: current?.status ?? 'received',
+    });
+    return { status: 'captured', id: invoiceId, reprocessed: false, logId: log.id };
+  }
+
   // Refresh the snapshot + mark pending before the (slow/failing) provider call.
   await setInvoiceStatus(db, invoiceId, 'pending', {
     snapshot_json: JSON.stringify(payload),
     error: null,
   });
 
-  const draft = buildInvoiceDraft(payload, { issueDate: opts.issueDate });
   let result: CreateResult;
   try {
     result = await provider.create(db, draft);
@@ -69,10 +93,15 @@ async function emitInvoice(
       error: null,
       issue_date: new Date(),
     });
-    return 'issued';
+    return { status: 'issued', id: invoiceId, reprocessed: false };
   }
   await setInvoiceStatus(db, invoiceId, 'failed', { error: result.error ?? 'Provider failed' });
-  return 'failed';
+  return {
+    status: 'failed',
+    id: invoiceId,
+    reprocessed: false,
+    error: result.error ?? 'Provider failed',
+  };
 }
 
 /**
@@ -99,12 +128,12 @@ export async function ingestInvoice(
       return { status: existing.status, id: existing.id, reprocessed: false };
     }
     // Non-terminal (received/pending/failed): refresh snapshot + re-attempt.
-    const status = await emitInvoice(db, existing.id, payload, providerName, provider, opts);
-    return { status, id: existing.id, reprocessed: true };
+    const emitted = await emitInvoice(db, existing.id, payload, providerName, provider, opts);
+    return { ...emitted, id: existing.id, reprocessed: true };
   }
 
   // New order — create the row first (durable), then emit.
   const created = await createInvoice(db, { orderId, payload, provider: providerName });
-  const status = await emitInvoice(db, created.id, payload, providerName, provider, opts);
-  return { status, id: created.id, reprocessed: false };
+  const emitted = await emitInvoice(db, created.id, payload, providerName, provider, opts);
+  return { ...emitted, id: created.id, reprocessed: false };
 }

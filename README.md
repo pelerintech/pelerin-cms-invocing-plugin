@@ -14,6 +14,10 @@ Set the encryption key used to encrypt provider credentials at rest:
 export INVOICING_ENCRYPTION_KEY=some-long-random-secret
 ```
 
+`INVOICING_ENCRYPTION_KEY` is **required** before you can save provider credentials — the settings form calls `encrypt()` on each value, which throws without it. Use a long, random secret (e.g. 48+ bytes of hex entropy).
+
+> **Keep it stable.** The key is the input to the KDF that derives the AES key. If you change or rotate it, provider credentials already encrypted in `invoicing_settings` become **undecryptable** and the provider will appear **unconfigured**. Set it once before entering credentials and never rotate it unless you also re-encrypt the stored values.
+
 ## Installation
 
 This plugin is installed into a running Pelerin CMS instance. The CMS resolves plugins at `pelerin_cms/plugins/<name>` (see `../pelerin_cms/`).

@@ -14,6 +14,8 @@ import type { InvoicingProvider } from '../providers/invoicing/interface.ts';
 import { getProvider } from '../providers/invoicing/registry.ts';
 import { buildInvoiceDraft } from '../providers/invoicing/draft.ts';
 import { getInvoiceById, setInvoiceStatus } from './data/invoices.ts';
+import { captureRequest } from './dev-capture.ts';
+import { isDevMode } from './dev-mode.ts';
 import { parseSnapshot } from './order-payload.ts';
 
 export interface ActionResult {
@@ -21,6 +23,26 @@ export interface ActionResult {
   status?: string;
   pdfLink?: string;
   error?: string;
+  /** The captured log id when dev mode parked the request. */
+  logId?: string;
+}
+
+/** Capture a would-be request in dev mode and report the parked result. */
+async function captureInDevMode(
+  db: LibSQLDatabase,
+  invoice: { id: string; provider: string | null; status: string },
+  operation: string,
+  requestJson: unknown
+): Promise<ActionResult | null> {
+  if (!isDevMode()) return null;
+  const log = await captureRequest(db, {
+    invoiceId: invoice.id,
+    operation,
+    provider: invoice.provider,
+    requestJson,
+    fromStatus: invoice.status,
+  });
+  return { ok: true, status: 'captured', logId: log.id };
 }
 
 async function resolveProvider(
@@ -42,11 +64,12 @@ export async function retryInvoice(
   if (invoice.status !== 'failed') {
     return { ok: false, error: `Invoice status "${invoice.status}" does not allow a retry` };
   }
-  const provider = await resolveProvider(invoice, providerOverride);
-  if (!provider) return { ok: false, error: 'Invoicing provider not registered' };
-
   const payload = parseSnapshot(invoice.snapshot_json);
   const draft = buildInvoiceDraft(payload);
+  const parked = await captureInDevMode(db, invoice, 'retry', draft);
+  if (parked) return parked;
+  const provider = await resolveProvider(invoice, providerOverride);
+  if (!provider) return { ok: false, error: 'Invoicing provider not registered' };
 
   let result;
   try {
@@ -81,6 +104,11 @@ export async function printInvoice(
   if (invoice.status !== 'issued' || !invoice.series || !invoice.number) {
     return { ok: false, error: `Invoice status "${invoice.status}" does not allow printing` };
   }
+  const parked = await captureInDevMode(db, invoice, 'print', {
+    series: invoice.series,
+    number: invoice.number,
+  });
+  if (parked) return parked;
   const provider = await resolveProvider(invoice, providerOverride);
   if (!provider) return { ok: false, error: 'Invoicing provider not registered' };
 
@@ -110,6 +138,11 @@ export async function stornoInvoice(
   if (invoice.status !== 'issued' || !invoice.series || !invoice.number) {
     return { ok: false, error: `Invoice status "${invoice.status}" does not allow storno` };
   }
+  const parked = await captureInDevMode(db, invoice, 'storno', {
+    series: invoice.series,
+    number: invoice.number,
+  });
+  if (parked) return parked;
   const provider = await resolveProvider(invoice, providerOverride);
   if (!provider) return { ok: false, error: 'Invoicing provider not registered' };
 
@@ -141,6 +174,11 @@ export async function cancelInvoice(
   if (invoice.status !== 'issued' || !invoice.series || !invoice.number) {
     return { ok: false, error: `Invoice status "${invoice.status}" does not allow cancel` };
   }
+  const parked = await captureInDevMode(db, invoice, 'cancel', {
+    series: invoice.series,
+    number: invoice.number,
+  });
+  if (parked) return parked;
   const provider = await resolveProvider(invoice, providerOverride);
   if (!provider) return { ok: false, error: 'Invoicing provider not registered' };
 

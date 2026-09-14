@@ -72,16 +72,17 @@ async function postJson<T extends object>(url: string, body: Record<string, unkn
   }
 }
 
-/** Load the credentials needed to authenticate a request. */
-async function loadCredentials(db: LibSQLDatabase) {
-  const [cui, key, serie, tip, url] = await Promise.all([
-    readSetting(db, 'fgo_cui'),
-    readSetting(db, 'fgo_private_key'),
-    readSetting(db, 'fgo_serie'),
-    readSetting(db, 'fgo_tip_factura'),
-    readSetting(db, 'fgo_platforma_url'),
-  ]);
-  return { cui, key, serie, tip, url };
+/** Load + decrypt the credentials needed for a request. Each operation lists exactly the keys it uses. */
+async function loadCredentials(
+  db: LibSQLDatabase,
+  keys: string[]
+): Promise<{ creds: Record<string, string>; missing: string | null }> {
+  const values: Record<string, string | null> = {};
+  for (const key of keys) {
+    values[key] = await readSetting(db, key);
+  }
+  const missing = missingCredentials(values);
+  return { creds: values as Record<string, string>, missing };
 }
 
 function missingCredentials(creds: Record<string, string | null>): string | null {
@@ -93,38 +94,52 @@ function missingCredentials(creds: Record<string, string | null>): string | null
 }
 
 export async function create(db: LibSQLDatabase, draft: InvoiceDraft): Promise<CreateResult> {
-  const creds = await loadCredentials(db);
-  const missing = missingCredentials(creds);
-  if (missing) return { success: false, error: missing };
-  const { cui, key, serie, tip, url } = creds as Record<string, string>;
+  const loaded = await loadCredentials(db, [
+    'fgo_cui',
+    'fgo_private_key',
+    'fgo_serie',
+    'fgo_tip_factura',
+    'fgo_platforma_url',
+  ]);
+  if (loaded.missing) return { success: false, error: loaded.missing };
+  const {
+    fgo_cui: cui,
+    fgo_private_key: key,
+    fgo_serie: serie,
+    fgo_tip_factura: tip,
+    fgo_platforma_url: url,
+  } = loaded.creds;
 
   const body = {
-    CodUnic: crypto.randomUUID(),
+    CodUnic: cui,
     Hash: hashAuth(cui, key, draft.billTo.name),
     Serie: serie,
     Valuta: draft.currency,
-    TipFactura: tip,
+    // default to the canonical FGO invoice type when unset
+    TipFactura: tip || 'Factura',
     DataEmitere: draft.issueDate,
     Client: {
-      Nume: draft.billTo.name,
-      CUI: draft.billTo.fiscalCode || undefined,
-      CodTara: draft.billTo.country,
+      Denumire: draft.billTo.name,
+      CodUnic: draft.billTo.fiscalCode || undefined,
+      // PJ when the client is a company / VAT payer, else PF (individual)
+      Tip: draft.billTo.vatPayer ? 'PJ' : 'PF',
+      Tara: draft.billTo.country,
       Adresa: draft.billTo.address,
-      Oras: draft.billTo.city,
+      Localitate: draft.billTo.city,
       ...(draft.billTo.county ? { Judet: draft.billTo.county } : {}),
       ...(draft.billTo.email ? { Email: draft.billTo.email } : {}),
       ...(draft.billTo.phone ? { Telefon: draft.billTo.phone } : {}),
+      // per-client legal/bank fields (NrRegCom, ContBancar) are intentionally
+      // omitted — no per-customer source; FGO derives them from the client CUI.
+      PlatitorTVA: draft.billTo.vatPayer,
     },
     Continut: draft.lines.map((line) => ({
-      Cod: line.code,
       Denumire: line.name,
-      Um: line.unit,
-      Cant: line.quantity,
-      PretUnitar: line.unitPriceNet,
-      Valoare: line.unitPriceNet * line.quantity,
+      CodArticol: line.code,
+      NrProduse: line.quantity,
+      UM: line.unit || 'BUC',
       CotaTVA: Math.round((line.vatRate || 0) * 100),
-      // net price is exclusive of VAT unless the draft says otherwise
-      PretCuTVA: line.vatIncluded || false,
+      PretUnitar: line.unitPriceNet,
     })),
     PlatformaUrl: url,
     IdExtern: draft.externalOrderId,
@@ -147,17 +162,21 @@ export async function create(db: LibSQLDatabase, draft: InvoiceDraft): Promise<C
   }
 }
 
+/** Credentials the non-create actions actually need (no emit-only serie/tip). */
+const ACTION_KEYS = ['fgo_cui', 'fgo_private_key', 'fgo_platforma_url'];
+
 export async function print(
   db: LibSQLDatabase,
   series: string,
   number: string
 ): Promise<PrintResult> {
-  const creds = await loadCredentials(db);
-  const missing = missingCredentials(creds);
-  if (missing) return { success: false, error: missing };
-  const { cui, key, url } = creds as Record<string, string>;
+  const loaded = await loadCredentials(db, ACTION_KEYS);
+  if (loaded.missing) return { success: false, error: loaded.missing };
+  const { fgo_cui: cui, fgo_private_key: key, fgo_platforma_url: url } = loaded.creds;
 
   const body = {
+    CodUnic: cui,
+    Numar: number,
     Serie: series,
     Hash: hashAuth(cui, key, number),
     PlatformaUrl: url,
@@ -178,12 +197,13 @@ export async function cancel(
   series: string,
   number: string
 ): Promise<CancelResult> {
-  const creds = await loadCredentials(db);
-  const missing = missingCredentials(creds);
-  if (missing) return { success: false, error: missing };
-  const { cui, key, url } = creds as Record<string, string>;
+  const loaded = await loadCredentials(db, ACTION_KEYS);
+  if (loaded.missing) return { success: false, error: loaded.missing };
+  const { fgo_cui: cui, fgo_private_key: key, fgo_platforma_url: url } = loaded.creds;
 
   const body = {
+    CodUnic: cui,
+    Numar: number,
     Serie: series,
     Hash: hashAuth(cui, key, number),
     PlatformaUrl: url,
@@ -204,12 +224,13 @@ export async function storno(
   series: string,
   number: string
 ): Promise<StornoResult> {
-  const creds = await loadCredentials(db);
-  const missing = missingCredentials(creds);
-  if (missing) return { success: false, error: missing };
-  const { cui, key, url } = creds as Record<string, string>;
+  const loaded = await loadCredentials(db, ACTION_KEYS);
+  if (loaded.missing) return { success: false, error: loaded.missing };
+  const { fgo_cui: cui, fgo_private_key: key, fgo_platforma_url: url } = loaded.creds;
 
   const body = {
+    CodUnic: cui,
+    Numar: number,
     Serie: series,
     Hash: hashAuth(cui, key, number),
     PlatformaUrl: url,

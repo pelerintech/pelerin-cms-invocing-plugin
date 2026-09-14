@@ -21,7 +21,7 @@ after(() => {
 const CUI = 'RO12345678';
 const PRIVATE_KEY = 'my-private-key';
 const SERIE = 'FGO2026';
-const TIP = 'FACTURA';
+const TIP = 'Factura';
 const URL = 'https://api-testuat.fgo.ro/v1';
 
 function configure(db: any) {
@@ -117,17 +117,66 @@ describe('FGO create (stubbed fetch)', () => {
     assert.equal(b.IdExtern, 'order-42');
     assert.equal(b.VerificareDuplicat, true);
     assert.equal(b.Hash, sha1Hash(CUI, PRIVATE_KEY, 'SC Exemplu SRL'));
-    assert.ok(b.CodUnic, 'CodUnic must be present');
-    assert.equal(b.Client.Nume, 'SC Exemplu SRL');
-    assert.equal(b.Client.CUI, 'RO12345678');
+    // CodUnic must be the company CUI (used for the hash), NOT a UUID
+    assert.equal(b.CodUnic, CUI);
+    // The Hash must be recomputable from the values actually sent in the body
+    // (same CodUnic + client Denumire) so FGO's own recomputation matches.
+    assert.equal(b.Hash, sha1Hash(b.CodUnic, PRIVATE_KEY, b.Client.Denumire));
+
+    // Client uses the FGO keys
+    assert.equal(b.Client.Denumire, 'SC Exemplu SRL');
+    assert.equal(b.Client.CodUnic, 'RO12345678');
+    assert.equal(b.Client.Tip, 'PJ');
+    assert.equal(b.Client.Tara, 'RO');
+    assert.equal(b.Client.Localitate, 'Bucuresti');
+    assert.equal(b.Client.Adresa, 'Str. X 1');
+    assert.equal(b.Client.PlatitorTVA, true);
+
+    // Per-client fields we cannot supply are omitted entirely
+    assert.equal(b.Client.NrRegCom, undefined);
+    assert.equal(b.Client.ContBancar, undefined);
 
     // Continut lines honor net-price + VAT-rate (CotaTVA as percentage)
     assert.equal(b.Continut.length, 2);
     assert.equal(b.Continut[0].Denumire, 'Widget');
-    assert.equal(b.Continut[0].Cant, 2);
+    assert.equal(b.Continut[0].CodArticol, 'W-1');
+    assert.equal(b.Continut[0].NrProduse, 2);
+    assert.equal(b.Continut[0].UM, 'buc');
     assert.equal(b.Continut[0].PretUnitar, 100);
     assert.equal(b.Continut[0].CotaTVA, 19);
     assert.equal(b.Continut[1].CotaTVA, 9);
+
+    // Invalid non-FGO keys are not sent
+    assert.equal(b.Continut[0].Valoare, undefined);
+    assert.equal(b.Continut[0].PretCuTVA, undefined);
+
+    // Client old wrong keys are gone
+    assert.equal(b.Client.Nume, undefined);
+    assert.equal(b.Client.CUI, undefined);
+    assert.equal(b.Client.CodTara, undefined);
+    assert.equal(b.Client.Oras, undefined);
+    assert.equal(b.Continut[0].Cant, undefined);
+    assert.equal(b.Continut[0].Cod, undefined);
+    assert.equal(b.Continut[0].Um, undefined);
+  });
+
+  test('PF client derived from an individual (no company) → Client.Tip = PF', async () => {
+    await configure(db);
+    const d = draft();
+    d.billTo = { ...d.billTo, name: 'Ion Popescu', fiscalCode: '', vatPayer: false };
+    const result = await fgo.create(db, d);
+    assert.equal(result.success, true);
+    assert.equal(captured!.body.Client.Tip, 'PF');
+    assert.equal(captured!.body.Client.PlatitorTVA, false);
+  });
+
+  test('a line with no unit defaults UM to BUC', async () => {
+    await configure(db);
+    const d = draft();
+    d.lines = [{ ...d.lines[0], unit: undefined }];
+    const result = await fgo.create(db, d);
+    assert.equal(result.success, true);
+    assert.equal(captured!.body.Continut[0].UM, 'BUC');
   });
 
   test('Success:false maps to { success:false, error: Message }', async () => {

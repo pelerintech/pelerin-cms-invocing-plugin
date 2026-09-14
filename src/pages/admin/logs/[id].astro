@@ -1,0 +1,234 @@
+---
+// Admin: Invoice operation log detail + outcome picker (dev-mode)
+// Route: /admin/plugins/invoicing/logs/[id]
+import AdminLayout from 'pelerin:admin-layout';
+import { createPluginContext } from 'pelerin:plugin-sdk';
+import { getDevLog } from '../../../lib/data/logs.ts';
+
+const sdk = createPluginContext();
+const user = await sdk.auth.requireAdmin(Astro.request);
+const logId = Astro.params.id;
+
+// Server-side fetch to confirm existence; the interactive render + outcome
+// picker load client-side from the admin-gated API.
+let logEntry = null;
+if (logId) {
+  try {
+    logEntry = await getDevLog(sdk.db, logId);
+  } catch {
+    logEntry = null;
+  }
+}
+---
+
+<AdminLayout
+  title="Operation Log"
+  currentPath={`/admin/plugins/invoicing/logs/${logId}`}
+  user={user}
+>
+  <div id="log-detail" class="col-span-12 p-6">
+    {
+      logEntry ? (
+        <div class="flex items-center justify-between mb-6">
+          <h1 class="text-2xl font-bold">
+            Operation Log
+            <span class="ml-2 badge badge-ghost">{logEntry.operation}</span>
+          </h1>
+          <a href="/admin/plugins/invoicing/logs" class="btn btn-sm btn-ghost">
+            ← Back to Logs
+          </a>
+        </div>
+      ) : (
+        <div class="text-center py-8 text-error">Log not found</div>
+      )
+    }
+  </div>
+</AdminLayout>
+
+<script define:vars={{ logId: Astro.params.id }}>
+  var LOG_ID = logId;
+
+  async function loadLog() {
+    try {
+      var res = await fetch('/api/plugins/invoicing/logs/' + logId);
+      var json = await res.json();
+      if (json.success) {
+        renderLog(json.data);
+      } else {
+        document.getElementById('log-detail').innerHTML =
+          '<div class="text-center py-8 text-error">Log not found</div>';
+      }
+    } catch (err) {
+      document.getElementById('log-detail').innerHTML =
+        '<div class="text-center py-8 text-error">Failed to load log: ' +
+        (err.message || 'unknown error') +
+        '</div>';
+    }
+  }
+
+  function renderLog(log) {
+    var isPending = log.resolution === 'pending';
+    var html =
+      '<div class="flex items-center justify-between mb-6">' +
+      '<h1 class="text-2xl font-bold">Operation Log <span class="ml-2 badge badge-ghost">' +
+      escapeHtml(log.operation) +
+      '</span></h1>' +
+      '<a href="/admin/plugins/invoicing/logs" class="btn btn-sm btn-ghost">← Back to Logs</a>' +
+      '</div>' +
+      '<div class="mb-6"><span class="badge ' +
+      (isPending ? 'badge-warning' : 'badge-success') +
+      '">' +
+      escapeHtml(log.resolution) +
+      '</span></div>' +
+      '<div class="overflow-x-auto mb-6"><table class="table w-full"><tbody>' +
+      '<tr><td class="font-medium w-48">Invoice</td><td class="font-mono text-xs">' +
+      escapeHtml(log.invoice_id || '—') +
+      '</td></tr>' +
+      '<tr><td class="font-medium">Operation</td><td class="font-mono text-xs">' +
+      escapeHtml(log.operation) +
+      '</td></tr>' +
+      '<tr><td class="font-medium">Provider</td><td>' +
+      escapeHtml(log.provider || '—') +
+      '</td></tr>' +
+      '<tr><td class="font-medium">From status</td><td>' +
+      escapeHtml(log.from_status) +
+      '</td></tr>' +
+      '<tr><td class="font-medium">Created</td><td>' +
+      new Date(log.created_at).toLocaleString() +
+      '</td></tr>' +
+      (log.decided_at
+        ? '<tr><td class="font-medium">Decided</td><td>' +
+          new Date(log.decided_at).toLocaleString() +
+          '</td></tr>'
+        : '') +
+      (log.error
+        ? '<tr><td class="font-medium">Error</td><td class="text-error">' +
+          escapeHtml(log.error) +
+          '</td></tr>'
+        : '') +
+      '</tbody></table></div>' +
+      '<div class="mb-6"><h2 class="text-lg font-bold mb-2">Captured request_json</h2>' +
+      '<pre class="bg-base-200 p-3 rounded text-sm whitespace-pre-wrap font-mono">' +
+      escapeHtml(JSON.stringify(log.request_json, null, 2)) +
+      '</pre></div>' +
+      (isPending ? outcomePicker(log) : '') +
+      (log.result_json
+        ? '<div class="mb-6"><h2 class="text-lg font-bold mb-2">Result</h2>' +
+          '<pre class="bg-base-200 p-3 rounded text-sm whitespace-pre-wrap font-mono">' +
+          escapeHtml(JSON.stringify(log.result_json, null, 2)) +
+          '</pre></div>'
+        : '') +
+      '<div id="outcome-feedback"></div>';
+    document.getElementById('log-detail').innerHTML = html;
+
+    if (isPending) {
+      wireOutcome(log);
+    }
+  }
+
+  // The outcome picker is rendered only for pending logs (log-now, decide-later).
+  function outcomePicker(log) {
+    var opts =
+      log.operation === 'emit' || log.operation === 'retry'
+        ? '<div class="grid grid-cols-1 md:grid-cols-3 gap-3">' +
+          '<label class="form-control"><span class="label-text text-xs">Series</span>' +
+          '<input id="oc-series" class="input input-bordered input-sm" placeholder="DEV1" /></label>' +
+          '<label class="form-control"><span class="label-text text-xs">Number</span>' +
+          '<input id="oc-number" class="input input-bordered input-sm" placeholder="1" /></label>' +
+          '<label class="form-control"><span class="label-text text-xs">PDF link</span>' +
+          '<input id="oc-pdf" class="input input-bordered input-sm" placeholder="https://" /></label>' +
+          '</div>'
+        : '';
+    var optsSim =
+      log.operation === 'storno'
+        ? '<div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">' +
+          '<label class="form-control"><span class="label-text text-xs">Storno series</span>' +
+          '<input id="oc-series" class="input input-bordered input-sm" placeholder="DEV1" /></label>' +
+          '<label class="form-control"><span class="label-text text-xs">Storno number</span>' +
+          '<input id="oc-number" class="input input-bordered input-sm" placeholder="99" /></label>' +
+          '</div>'
+        : '';
+    return (
+      '<div class="card bg-base-100 shadow mb-6"><div class="card-body">' +
+      '<h2 class="card-title text-lg">Decide outcome</h2>' +
+      '<div class="flex gap-3 mb-3">' +
+      '<button class="btn btn-sm btn-success" id="oc-success">Simulate Success</button>' +
+      '<button class="btn btn-sm btn-error" id="oc-failure">Simulate Failure</button>' +
+      '</div>' +
+      opts +
+      optsSim +
+      '<label class="form-control mt-3"><span class="label-text text-xs">Error (for failure)</span>' +
+      '<input id="oc-error" class="input input-bordered input-sm" placeholder="Provider rejected" /></label>' +
+      '</div></div>'
+    );
+  }
+
+  function wireOutcome(log) {
+    var successBtn = document.getElementById('oc-success');
+    var failureBtn = document.getElementById('oc-failure');
+    if (successBtn) {
+      successBtn.addEventListener('click', function () {
+        submitOutcome('success');
+      });
+    }
+    if (failureBtn) {
+      failureBtn.addEventListener('click', function () {
+        submitOutcome('failure');
+      });
+    }
+  }
+
+  async function submitOutcome(outcome) {
+    var body = { outcome: outcome };
+    var series = elValue('oc-series');
+    var number = elValue('oc-number');
+    var pdf = elValue('oc-pdf');
+    var error = elValue('oc-error');
+    if (series) body.series = series;
+    if (number) body.number = number;
+    if (pdf) body.pdfLink = pdf;
+    if (error) body.error = error;
+    try {
+      var res = await fetch('/api/plugins/invoicing/logs/' + LOG_ID + '/outcome', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      var json = await res.json();
+      var fb = document.getElementById('outcome-feedback');
+      if (json.success) {
+        fb.innerHTML =
+          '<div class="alert alert-success"><span>Outcome applied (invoice ' +
+          (json.data.invoice ? json.data.invoice.status : '') +
+          ').</span></div>';
+        loadLog();
+      } else {
+        fb.innerHTML =
+          '<div class="alert alert-error"><span>' +
+          escapeHtml(json.error || 'Outcome failed') +
+          '</span></div>';
+      }
+    } catch (err) {
+      var fb2 = document.getElementById('outcome-feedback');
+      if (fb2) {
+        fb2.innerHTML =
+          '<div class="alert alert-error"><span>' +
+          escapeHtml(err.message || 'unknown error') +
+          '</span></div>';
+      }
+    }
+  }
+
+  function elValue(id) {
+    var el = document.getElementById(id);
+    return el ? el.value.trim() : '';
+  }
+
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str === null || str === undefined ? '' : str));
+    return div.innerHTML;
+  }
+
+  loadLog();
+</script>

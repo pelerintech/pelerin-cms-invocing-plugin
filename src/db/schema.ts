@@ -7,7 +7,7 @@
  * so they are importable and executable in the real-SQLite test harness
  * outside the Astro build.
  */
-import { sqliteTable, text, customType } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, customType } from 'drizzle-orm/sqlite-core';
 
 /**
  * Date column type: stored as TEXT (ISO 8601 string), converted to/from
@@ -59,6 +59,31 @@ export const invoices = sqliteTable('invoices', {
   issue_date: dateType('issue_date'),
   created_at: dateType('created_at').notNull(),
   updated_at: dateType('updated_at').notNull(),
+});
+
+/**
+ * Invoice operation logs — the dev-mode audit trail.
+ *
+ * In dev mode the plugin captures the would-be request (the provider-neutral
+ * `InvoiceDraft` for emit/retry, or `{ series, number }` for print/storno/
+ * cancel) into one row per trigger, parks the invoice in its non-terminal
+ * starting state, and lets the operator decide the outcome from the log
+ * detail. `resolution` is `pending` until decided, then `decided` with
+ * `success`/`error`/`result_json` and `decided_at` set.
+ */
+export const invoice_logs = sqliteTable('invoice_logs', {
+  id: text('id').primaryKey(),
+  invoice_id: text('invoice_id'),
+  operation: text('operation').notNull(),
+  provider: text('provider'),
+  request_json: text('request_json').notNull(),
+  from_status: text('from_status').notNull(),
+  resolution: text('resolution').notNull().default('pending'),
+  success: integer('success', { mode: 'boolean' }),
+  error: text('error'),
+  result_json: text('result_json'),
+  created_at: dateType('created_at').notNull(),
+  decided_at: dateType('decided_at'),
 });
 
 /**

@@ -74,6 +74,9 @@ describe('FGO print / cancel / storno (stubbed fetch)', () => {
     assert.equal(captured!.url, `${URL}/factura/pdf`);
     assert.equal(captured!.body.Hash, sha1Hash(`${CUI}${PRIVATE_KEY}${NUMBER}`));
     assert.equal(captured!.body.Serie, SERIE);
+    assert.equal(captured!.body.CodUnic, CUI);
+    assert.equal(captured!.body.Numar, NUMBER);
+    assert.equal(captured!.body.PlatformaUrl, URL);
   });
 
   test('cancel posts the cancel endpoint and returns success', async () => {
@@ -82,6 +85,9 @@ describe('FGO print / cancel / storno (stubbed fetch)', () => {
     assert.equal(result.success, true);
     assert.equal(captured!.url, `${URL}/factura/anulare`);
     assert.equal(captured!.body.Hash, sha1Hash(`${CUI}${PRIVATE_KEY}${NUMBER}`));
+    assert.equal(captured!.body.CodUnic, CUI);
+    assert.equal(captured!.body.Numar, NUMBER);
+    assert.equal(captured!.body.Serie, SERIE);
   });
 
   test('storno returns success + storno refs', async () => {
@@ -101,6 +107,9 @@ describe('FGO print / cancel / storno (stubbed fetch)', () => {
     assert.equal(result.success, true);
     assert.equal(result.seriesStorno, 'FGO2026');
     assert.equal(result.numberStorno, '43');
+    assert.equal(captured!.body.CodUnic, CUI);
+    assert.equal(captured!.body.Numar, NUMBER);
+    assert.equal(captured!.body.Serie, SERIE);
   });
 
   test('provider error → { success:false, error }', async () => {
@@ -123,6 +132,32 @@ describe('FGO print / cancel / storno (stubbed fetch)', () => {
     };
     await configure(db);
     assert.equal((await fgo.print(db, SERIE, NUMBER)).success, false);
+  });
+
+  test('actions run with only cui/private_key/url configured (serie/tip unneeded)', async () => {
+    // Actions only need the auth trio; the emit-only fgo_serie/fgo_tip_factura
+    // keys must not block print/cancel/storno.
+    await setSetting(db, 'fgo_cui', encrypt(CUI));
+    await setSetting(db, 'fgo_private_key', encrypt(PRIVATE_KEY));
+    await setSetting(db, 'fgo_platforma_url', encrypt(URL));
+
+    assert.equal((await fgo.print(db, SERIE, NUMBER)).success, true);
+    assert.equal(captured!.url, `${URL}/factura/pdf`);
+    assert.equal((await fgo.cancel(db, SERIE, NUMBER)).success, true);
+    assert.equal(captured!.url, `${URL}/factura/anulare`);
+    assert.equal((await fgo.storno(db, SERIE, NUMBER)).success, true);
+    assert.equal(captured!.url, `${URL}/factura/storno`);
+  });
+
+  test('missing credential fails before any request (fetch not called)', async () => {
+    // configure everything the actions need except the private key
+    await setSetting(db, 'fgo_cui', encrypt(CUI));
+    await setSetting(db, 'fgo_platforma_url', encrypt(URL));
+    captured = null;
+    const res = await fgo.print(db, SERIE, NUMBER);
+    assert.equal(res.success, false);
+    assert.ok(/private_key|credential/i.test(res.error || ''), `unexpected error: ${res.error}`);
+    assert.equal(captured, null, 'fetch must not be called');
   });
 });
 

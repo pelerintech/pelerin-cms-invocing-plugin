@@ -13,6 +13,14 @@
       "entrypoint": "./src/pages/admin/invoices/[id].astro"
     },
     {
+      "pattern": "/admin/plugins/invoicing/logs",
+      "entrypoint": "./src/pages/admin/logs/index.astro"
+    },
+    {
+      "pattern": "/admin/plugins/invoicing/logs/[id]",
+      "entrypoint": "./src/pages/admin/logs/[id].astro"
+    },
+    {
       "pattern": "/admin/plugins/invoicing/settings/providers",
       "entrypoint": "./src/pages/admin/settings/providers/index.astro"
     },
@@ -47,6 +55,18 @@
       "entrypoint": "./src/api/invoicing/invoices/[id]/cancel.ts"
     },
     {
+      "pattern": "/api/plugins/invoicing/logs",
+      "entrypoint": "./src/api/invoicing/logs/index.ts"
+    },
+    {
+      "pattern": "/api/plugins/invoicing/logs/[id]",
+      "entrypoint": "./src/api/invoicing/logs/[id]/index.ts"
+    },
+    {
+      "pattern": "/api/plugins/invoicing/logs/[id]/outcome",
+      "entrypoint": "./src/api/invoicing/logs/[id]/outcome.ts"
+    },
+    {
       "pattern": "/api/plugins/invoicing/providers",
       "entrypoint": "./src/api/invoicing/providers/index.ts"
     },
@@ -61,6 +81,7 @@
   ],
   "navItems": [
     { "label": "Invoices", "href": "/admin/plugins/invoicing", "icon": "receipt" },
+    { "label": "Logs", "href": "/admin/plugins/invoicing/logs", "icon": "list" },
     {
       "label": "Providers",
       "href": "/admin/plugins/invoicing/settings/providers",

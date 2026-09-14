@@ -91,6 +91,37 @@ test('navItems has Invoices and Providers under the invoicing namespace', () => 
   );
 });
 
+// ─── Dev-mode logs surface (invoicing-dev-mode) ────────────────────────────
+
+test('adminPages register the logs list + detail pages', () => {
+  const parsed = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+  const patterns = parsed.adminPages.map((p: any) => p.pattern);
+  assert.ok(patterns.includes('/admin/plugins/invoicing/logs'), 'must register logs list page');
+  assert.ok(
+    patterns.includes('/admin/plugins/invoicing/logs/[id]'),
+    'must register logs detail page'
+  );
+});
+
+test('apiEndpoints register the three logs endpoints', () => {
+  const parsed = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+  const patterns = parsed.apiEndpoints.map((p: any) => p.pattern);
+  assert.ok(patterns.includes('/api/plugins/invoicing/logs'), 'must register logs list');
+  assert.ok(patterns.includes('/api/plugins/invoicing/logs/[id]'), 'must register logs detail');
+  assert.ok(
+    patterns.includes('/api/plugins/invoicing/logs/[id]/outcome'),
+    'must register logs outcome'
+  );
+});
+
+test('navItems includes a Logs entry under the invoicing namespace', () => {
+  const parsed = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+  const labels = parsed.navItems.map((n: any) => n.label);
+  assert.ok(labels.includes('Logs'), 'navItems must include a Logs entry');
+  const logs = parsed.navItems.find((n: any) => n.label === 'Logs');
+  assert.ok(logs.href.startsWith('/admin/plugins/invoicing'), 'Logs nav must be in the namespace');
+});
+
 test('identity fields unchanged', () => {
   const parsed = JSON.parse(readFileSync(manifestPath, 'utf-8'));
   assert.strictEqual(parsed.name, 'invoicing_plugin');
