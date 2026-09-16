@@ -92,10 +92,16 @@ async function emitInvoice(
       provider_ref: draft.externalOrderId,
       error: null,
       issue_date: new Date(),
+      req_payload: JSON.stringify(result.request),
+      res_payload: JSON.stringify(result.response),
     });
     return { status: 'issued', id: invoiceId, reprocessed: false };
   }
-  await setInvoiceStatus(db, invoiceId, 'failed', { error: result.error ?? 'Provider failed' });
+  await setInvoiceStatus(db, invoiceId, 'failed', {
+    error: result.error ?? 'Provider failed',
+    req_payload: JSON.stringify(result.request),
+    res_payload: JSON.stringify(result.response),
+  });
   return {
     status: 'failed',
     id: invoiceId,

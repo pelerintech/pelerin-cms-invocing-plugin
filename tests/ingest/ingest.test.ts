@@ -91,6 +91,8 @@ describe('ingestInvoice (idempotent, durable, ecomm order-data shape)', () => {
       series: 'FGO',
       number: '1',
       pdfLink: 'https://pdf',
+      request: { CodUnic: 'RO1', Hash: 'ABC' },
+      response: { Success: true, Factura: { Serie: 'FGO', Numar: '1' } },
     });
     const res = await ingestInvoice(db, payload('o-1'), stub.provider);
     assert.equal(res.status, 'issued');
@@ -101,6 +103,11 @@ describe('ingestInvoice (idempotent, durable, ecomm order-data shape)', () => {
     assert.equal(row.series, 'FGO');
     assert.equal(row.number, '1');
     assert.equal(row.pdf_link, 'https://pdf');
+    assert.equal(row.req_payload, JSON.stringify({ CodUnic: 'RO1', Hash: 'ABC' }));
+    assert.equal(
+      row.res_payload,
+      JSON.stringify({ Success: true, Factura: { Serie: 'FGO', Numar: '1' } })
+    );
     // Durable row fields derive from the new ecomm shape.
     assert.equal(row.order_id, 'o-1');
     assert.equal(row.order_number, 'ORD-o-1');
@@ -112,7 +119,12 @@ describe('ingestInvoice (idempotent, durable, ecomm order-data shape)', () => {
   });
 
   test('provider failure → row retained as failed with error (nothing lost)', async () => {
-    const stub = stubProvider({ success: false, error: 'Rejected by FGO' });
+    const stub = stubProvider({
+      success: false,
+      error: 'Rejected by FGO',
+      request: { CodUnic: 'RO1' },
+      response: { Success: false, Message: 'Rejected by FGO' },
+    });
     const res = await ingestInvoice(db, payload('o-2'), stub.provider);
     assert.equal(res.status, 'failed');
 
@@ -120,6 +132,8 @@ describe('ingestInvoice (idempotent, durable, ecomm order-data shape)', () => {
     assert.ok(row, 'row must still exist after failure');
     assert.equal(row.status, 'failed');
     assert.equal(row.error, 'Rejected by FGO');
+    assert.equal(row.req_payload, JSON.stringify({ CodUnic: 'RO1' }));
+    assert.equal(row.res_payload, JSON.stringify({ Success: false, Message: 'Rejected by FGO' }));
     assert.equal(stub.calls, 1);
   });
 

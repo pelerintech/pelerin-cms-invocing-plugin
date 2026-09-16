@@ -19,6 +19,8 @@ export interface InvoiceRow {
   pdf_link: string | null;
   provider_ref: string | null;
   error: string | null;
+  req_payload: string | null;
+  res_payload: string | null;
   issue_date: Date | null;
   created_at: Date;
   updated_at: Date;
@@ -98,6 +100,8 @@ export interface InvoiceStatusPatch {
   pdf_link?: string | null;
   provider_ref?: string | null;
   error?: string | null;
+  req_payload?: string | null;
+  res_payload?: string | null;
   issue_date?: Date | null;
   provider?: string | null;
   snapshot_json?: string;

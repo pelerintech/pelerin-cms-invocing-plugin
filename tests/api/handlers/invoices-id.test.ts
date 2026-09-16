@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { ensureLoader } from '../../stubs/register.mjs';
 import { makeFakeSdk, makeCtx, poisonDb, unauthorizedError } from '../helpers.ts';
 import { createTestDb } from '../../db/harness.ts';
-import { createInvoice } from '../../../src/lib/data/invoices.ts';
+import { createInvoice, setInvoiceStatus } from '../../../src/lib/data/invoices.ts';
 import { orderData } from '../../fixtures/order-data.ts';
 
 ensureLoader();
@@ -41,6 +41,32 @@ describe('runGet (invoices/[id])', () => {
       assert.equal(body.data.id, created.id);
       assert.equal(body.data.snapshot.order.id, 'o-1');
       assert.equal(body.data.snapshot.items.length, 1);
+    } finally {
+      await t.cleanup();
+    }
+  });
+
+  test('detail returns req_payload and res_payload when set', async () => {
+    const t = await createTestDb();
+    try {
+      const created = await createInvoice(t.db, {
+        orderId: 'o-cap',
+        payload: payload('o-cap'),
+        provider: 'fgo',
+      });
+      await setInvoiceStatus(t.db, created.id, 'issued', {
+        req_payload: JSON.stringify({ CodUnic: 'RO1' }),
+        res_payload: JSON.stringify({ Success: true }),
+      });
+      const res = await runGet({
+        db: t.db,
+        sdk: makeFakeSdk(),
+        ctx: makeCtx({ url: 'http://localhost/api', params: { id: created.id } }),
+      });
+      assert.equal(res.status, 200);
+      const body = await res.json();
+      assert.equal(body.data.req_payload, JSON.stringify({ CodUnic: 'RO1' }));
+      assert.equal(body.data.res_payload, JSON.stringify({ Success: true }));
     } finally {
       await t.cleanup();
     }

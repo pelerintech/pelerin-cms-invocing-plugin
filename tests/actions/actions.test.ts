@@ -83,6 +83,14 @@ describe('action dispatch (retry / print / storno / cancel)', () => {
   // ── retry ──
   test('retryInvoice: failed → issued on provider success, clears error', async () => {
     const s = stub();
+    s.createResult = {
+      success: true,
+      series: 'FGO',
+      number: '10',
+      pdfLink: 'https://pdf',
+      request: { CodUnic: 'RO1' },
+      response: { Success: true, Factura: { Numar: '10' } },
+    };
     const id = await failedInvoice('o-retry-1');
     const res = await retryInvoice(db, id, s.provider);
     assert.equal(res.ok, true);
@@ -91,17 +99,26 @@ describe('action dispatch (retry / print / storno / cancel)', () => {
     assert.equal(row!.status, 'issued');
     assert.equal(row!.number, '10');
     assert.equal(row!.error, null);
+    assert.equal(row!.req_payload, JSON.stringify({ CodUnic: 'RO1' }));
+    assert.equal(row!.res_payload, JSON.stringify({ Success: true, Factura: { Numar: '10' } }));
   });
 
   test('retryInvoice: stays failed with latest error on provider failure', async () => {
     const s = stub();
-    s.createResult = { success: false, error: 'still rejected' };
+    s.createResult = {
+      success: false,
+      error: 'still rejected',
+      request: { CodUnic: 'RO1' },
+      response: { Success: false, Message: 'still rejected' },
+    };
     const id = await failedInvoice('o-retry-2');
     const res = await retryInvoice(db, id, s.provider);
     assert.equal(res.ok, false);
     const row = await getInvoiceById(db, id);
     assert.equal(row!.status, 'failed');
     assert.equal(row!.error, 'still rejected');
+    assert.equal(row!.req_payload, JSON.stringify({ CodUnic: 'RO1' }));
+    assert.equal(row!.res_payload, JSON.stringify({ Success: false, Message: 'still rejected' }));
   });
 
   test('retryInvoice: non-failed invoice is rejected without a provider call', async () => {
@@ -115,11 +132,23 @@ describe('action dispatch (retry / print / storno / cancel)', () => {
   // ── print ──
   test('printInvoice: issued → returns provider pdf link', async () => {
     const s = stub();
+    s.printResult = {
+      success: true,
+      pdfLink: 'https://pdf-print',
+      request: { Serie: 'FGO', Numar: '42' },
+      response: { Success: true, Factura: { Link: 'https://pdf-print' } },
+    };
     const id = await issuedInvoice('o-print-1');
     const res = await printInvoice(db, id, s.provider);
     assert.equal(res.ok, true);
     assert.equal(res.pdfLink, 'https://pdf-print');
     assert.equal(s.calls.print, 1);
+    const row = await getInvoiceById(db, id);
+    assert.equal(row!.req_payload, JSON.stringify({ Serie: 'FGO', Numar: '42' }));
+    assert.equal(
+      row!.res_payload,
+      JSON.stringify({ Success: true, Factura: { Link: 'https://pdf-print' } })
+    );
   });
 
   test('printInvoice: stores pdfLink if returned and absent', async () => {
@@ -153,6 +182,13 @@ describe('action dispatch (retry / print / storno / cancel)', () => {
   // ── storno ──
   test('stornoInvoice: issued → storned (terminal) with storno ref', async () => {
     const s = stub();
+    s.stornoResult = {
+      success: true,
+      seriesStorno: 'FGO',
+      numberStorno: '99',
+      request: { Serie: 'FGO', Numar: '42' },
+      response: { Success: true, Factura: { SerieStorno: 'FGO', NumarStorno: '99' } },
+    };
     const id = await issuedInvoice('o-storno-1');
     const res = await stornoInvoice(db, id, s.provider);
     assert.equal(res.ok, true);
@@ -160,6 +196,11 @@ describe('action dispatch (retry / print / storno / cancel)', () => {
     const row = await getInvoiceById(db, id);
     assert.equal(row!.status, 'storned');
     assert.ok(row!.provider_ref, 'storno reference must be stored');
+    assert.equal(row!.req_payload, JSON.stringify({ Serie: 'FGO', Numar: '42' }));
+    assert.equal(
+      row!.res_payload,
+      JSON.stringify({ Success: true, Factura: { SerieStorno: 'FGO', NumarStorno: '99' } })
+    );
   });
 
   test('stornoInvoice: on provider failure status unchanged', async () => {
@@ -170,6 +211,55 @@ describe('action dispatch (retry / print / storno / cancel)', () => {
     assert.equal(res.ok, false);
     const row = await getInvoiceById(db, id);
     assert.equal(row!.status, 'issued');
+  });
+
+  test('a failing print/storno/cancel persists payload + error but keeps the status', async () => {
+    const s = stub();
+    s.printResult = {
+      success: false,
+      error: 'print refused',
+      request: { Serie: 'FGO', Numar: '42' },
+      response: { Success: false, Message: 'print refused' },
+    };
+    s.stornoResult = {
+      success: false,
+      error: 'storno refused',
+      request: { Serie: 'FGO', Numar: '42' },
+      response: { Success: false, Message: 'storno refused' },
+    };
+    s.cancelResult = {
+      success: false,
+      error: 'cancel refused',
+      request: { Serie: 'FGO', Numar: '42' },
+      response: { Success: false, Message: 'cancel refused' },
+    };
+
+    const pid = await issuedInvoice('o-fail-print');
+    const pres = await printInvoice(db, pid, s.provider);
+    assert.equal(pres.ok, false);
+    let row = await getInvoiceById(db, pid);
+    assert.equal(row!.status, 'issued', 'print failure must keep the status');
+    assert.equal(row!.error, 'print refused');
+    assert.equal(row!.req_payload, JSON.stringify({ Serie: 'FGO', Numar: '42' }));
+    assert.equal(row!.res_payload, JSON.stringify({ Success: false, Message: 'print refused' }));
+
+    const sid = await issuedInvoice('o-fail-storno');
+    const sres = await stornoInvoice(db, sid, s.provider);
+    assert.equal(sres.ok, false);
+    row = await getInvoiceById(db, sid);
+    assert.equal(row!.status, 'issued', 'storno failure must keep the status');
+    assert.equal(row!.error, 'storno refused');
+    assert.equal(row!.req_payload, JSON.stringify({ Serie: 'FGO', Numar: '42' }));
+    assert.equal(row!.res_payload, JSON.stringify({ Success: false, Message: 'storno refused' }));
+
+    const cid = await issuedInvoice('o-fail-cancel');
+    const cres = await cancelInvoice(db, cid, s.provider);
+    assert.equal(cres.ok, false);
+    row = await getInvoiceById(db, cid);
+    assert.equal(row!.status, 'issued', 'cancel failure must keep the status');
+    assert.equal(row!.error, 'cancel refused');
+    assert.equal(row!.req_payload, JSON.stringify({ Serie: 'FGO', Numar: '42' }));
+    assert.equal(row!.res_payload, JSON.stringify({ Success: false, Message: 'cancel refused' }));
   });
 
   test('stornoInvoice: non-issued invoice rejected without provider call', async () => {
@@ -183,12 +273,19 @@ describe('action dispatch (retry / print / storno / cancel)', () => {
   // ── cancel ──
   test('cancelInvoice: issued → cancelled (terminal)', async () => {
     const s = stub();
+    s.cancelResult = {
+      success: true,
+      request: { Serie: 'FGO', Numar: '42' },
+      response: { Success: true },
+    };
     const id = await issuedInvoice('o-cancel-1');
     const res = await cancelInvoice(db, id, s.provider);
     assert.equal(res.ok, true);
     assert.equal(s.calls.cancel, 1);
     const row = await getInvoiceById(db, id);
     assert.equal(row!.status, 'cancelled');
+    assert.equal(row!.req_payload, JSON.stringify({ Serie: 'FGO', Numar: '42' }));
+    assert.equal(row!.res_payload, JSON.stringify({ Success: true }));
   });
 
   test('cancelInvoice: non-issued invoice rejected without provider call', async () => {

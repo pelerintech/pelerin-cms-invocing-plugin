@@ -154,11 +154,18 @@ export async function create(db: LibSQLDatabase, draft: InvoiceDraft): Promise<C
         series: data.Factura?.Serie,
         number: data.Factura?.Numar,
         pdfLink: data.Factura?.Link,
+        request: body,
+        response: data,
       };
     }
-    return { success: false, error: data?.Message || 'FGO emit failed' };
+    return {
+      success: false,
+      error: data?.Message || 'FGO emit failed',
+      request: body,
+      response: data,
+    };
   } catch (err) {
-    return { success: false, error: String((err as Error).message || err) };
+    return { success: false, error: String((err as Error).message || err), request: body };
   }
 }
 
@@ -184,11 +191,21 @@ export async function print(
   try {
     const data = await postJson<FgoResponse>(`${url}/factura/pdf`, body);
     if (data && data.Success === true) {
-      return { success: true, pdfLink: data.Factura?.Link || data.Link };
+      return {
+        success: true,
+        pdfLink: data.Factura?.Link || data.Link,
+        request: body,
+        response: data,
+      };
     }
-    return { success: false, error: data?.Message || 'FGO print failed' };
+    return {
+      success: false,
+      error: data?.Message || 'FGO print failed',
+      request: body,
+      response: data,
+    };
   } catch (err) {
-    return { success: false, error: String((err as Error).message || err) };
+    return { success: false, error: String((err as Error).message || err), request: body };
   }
 }
 
@@ -211,11 +228,16 @@ export async function cancel(
   try {
     const data = await postJson<FgoResponse>(`${url}/factura/anulare`, body);
     if (data && data.Success === true) {
-      return { success: true };
+      return { success: true, request: body, response: data };
     }
-    return { success: false, error: data?.Message || 'FGO cancel failed' };
+    return {
+      success: false,
+      error: data?.Message || 'FGO cancel failed',
+      request: body,
+      response: data,
+    };
   } catch (err) {
-    return { success: false, error: String((err as Error).message || err) };
+    return { success: false, error: String((err as Error).message || err), request: body };
   }
 }
 
@@ -242,11 +264,18 @@ export async function storno(
         success: true,
         seriesStorno: data.Factura?.SerieStorno || data.SerieStorno,
         numberStorno: data.Factura?.NumarStorno || data.NumarStorno,
+        request: body,
+        response: data,
       };
     }
-    return { success: false, error: data?.Message || 'FGO storno failed' };
+    return {
+      success: false,
+      error: data?.Message || 'FGO storno failed',
+      request: body,
+      response: data,
+    };
   } catch (err) {
-    return { success: false, error: String((err as Error).message || err) };
+    return { success: false, error: String((err as Error).message || err), request: body };
   }
 }
 

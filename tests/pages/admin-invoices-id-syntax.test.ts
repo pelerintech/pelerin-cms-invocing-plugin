@@ -23,6 +23,10 @@ describe('admin invoices/[id].astro (invoice detail) — structure + client <scr
     assert.match(src, /print/, 'must wire the print endpoint');
     assert.match(src, /storno/, 'must wire the storno endpoint');
     assert.match(src, /cancel/, 'must wire the cancel endpoint');
+    // captures the provider request/response in an "Extra info" accordion
+    assert.match(src, /Extra info/, 'must render an "Extra info" accordion');
+    assert.match(src, /req_payload/, 'must render req_payload');
+    assert.match(src, /res_payload/, 'must render res_payload');
   });
 
   it('client <script> parses without a syntax error', () => {

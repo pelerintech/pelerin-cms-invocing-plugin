@@ -86,10 +86,16 @@ export async function retryInvoice(
       provider_ref: draft.externalOrderId,
       error: null,
       issue_date: new Date(),
+      req_payload: JSON.stringify(result.request),
+      res_payload: JSON.stringify(result.response),
     });
     return { ok: true, status: 'issued' };
   }
-  await setInvoiceStatus(db, invoiceId, 'failed', { error: result.error ?? 'Provider failed' });
+  await setInvoiceStatus(db, invoiceId, 'failed', {
+    error: result.error ?? 'Provider failed',
+    req_payload: JSON.stringify(result.request),
+    res_payload: JSON.stringify(result.response),
+  });
   return { ok: false, error: result.error ?? 'Provider failed' };
 }
 
@@ -119,11 +125,18 @@ export async function printInvoice(
     result = { success: false, error: String((err as Error).message || err) };
   }
   if (!result.success) {
+    await setInvoiceStatus(db, invoiceId, invoice.status, {
+      error: result.error ?? 'Print failed',
+      req_payload: JSON.stringify(result.request),
+      res_payload: JSON.stringify(result.response),
+    });
     return { ok: false, error: result.error ?? 'Print failed' };
   }
-  if (result.pdfLink && !invoice.pdf_link) {
-    await setInvoiceStatus(db, invoiceId, invoice.status, { pdf_link: result.pdfLink });
-  }
+  await setInvoiceStatus(db, invoiceId, invoice.status, {
+    ...(result.pdfLink && !invoice.pdf_link ? { pdf_link: result.pdfLink } : {}),
+    req_payload: JSON.stringify(result.request),
+    res_payload: JSON.stringify(result.response),
+  });
   return { ok: true, pdfLink: result.pdfLink };
 }
 
@@ -153,13 +166,23 @@ export async function stornoInvoice(
     result = { success: false, error: String((err as Error).message || err) };
   }
   if (!result.success) {
+    await setInvoiceStatus(db, invoiceId, invoice.status, {
+      error: result.error ?? 'Storno failed',
+      req_payload: JSON.stringify(result.request),
+      res_payload: JSON.stringify(result.response),
+    });
     return { ok: false, error: result.error ?? 'Storno failed' };
   }
   const ref =
     result.seriesStorno && result.numberStorno
       ? `${result.seriesStorno}/${result.numberStorno}`
       : null;
-  await setInvoiceStatus(db, invoiceId, 'storned', { provider_ref: ref, error: null });
+  await setInvoiceStatus(db, invoiceId, 'storned', {
+    provider_ref: ref,
+    error: null,
+    req_payload: JSON.stringify(result.request),
+    res_payload: JSON.stringify(result.response),
+  });
   return { ok: true, status: 'storned' };
 }
 
@@ -189,8 +212,17 @@ export async function cancelInvoice(
     result = { success: false, error: String((err as Error).message || err) };
   }
   if (!result.success) {
+    await setInvoiceStatus(db, invoiceId, invoice.status, {
+      error: result.error ?? 'Cancel failed',
+      req_payload: JSON.stringify(result.request),
+      res_payload: JSON.stringify(result.response),
+    });
     return { ok: false, error: result.error ?? 'Cancel failed' };
   }
-  await setInvoiceStatus(db, invoiceId, 'cancelled', { error: null });
+  await setInvoiceStatus(db, invoiceId, 'cancelled', {
+    error: null,
+    req_payload: JSON.stringify(result.request),
+    res_payload: JSON.stringify(result.response),
+  });
   return { ok: true, status: 'cancelled' };
 }

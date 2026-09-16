@@ -106,6 +106,13 @@ describe('FGO create (stubbed fetch)', () => {
     assert.equal(result.number, '42');
     assert.equal(result.pdfLink, 'https://pdf');
 
+    // The result carries the exact body posted + the parsed response envelope.
+    assert.deepEqual(result.request, captured!.body);
+    assert.deepEqual(result.response, {
+      Success: true,
+      Factura: { Serie: 'FGO2026', Numar: '42', Link: 'https://pdf' },
+    });
+
     assert.ok(captured, 'fetch must have been called');
     assert.equal(captured!.url, `${URL}/factura/emitere`);
 
@@ -180,25 +187,36 @@ describe('FGO create (stubbed fetch)', () => {
   });
 
   test('Success:false maps to { success:false, error: Message }', async () => {
-    globalThis.fetch = async () => ({
-      ok: true,
-      json: async () => ({ Success: false, Message: 'Serie invalida' }),
-      text: async () => '',
-    });
+    globalThis.fetch = async (url: string, options: any) => {
+      captured = { url, body: JSON.parse(options.body) };
+      return {
+        ok: true,
+        json: async () => ({ Success: false, Message: 'Serie invalida' }),
+        text: async () => '',
+      };
+    };
     await configure(db);
     const result = await fgo.create(db, draft());
     assert.equal(result.success, false);
     assert.equal(result.error, 'Serie invalida');
+    // On a provider rejection we still see the body sent + the error envelope.
+    assert.deepEqual(result.request, captured!.body);
+    assert.deepEqual(result.response, { Success: false, Message: 'Serie invalida' });
   });
 
-  test('network failure maps to { success:false, error }', async () => {
-    globalThis.fetch = async () => {
+  test('network failure maps to { success:false, error } and still returns the request body', async () => {
+    globalThis.fetch = async (url: string, options: any) => {
+      captured = { url, body: JSON.parse(options.body) };
       throw new Error('ECONNREFUSED');
     };
     await configure(db);
     const result = await fgo.create(db, draft());
     assert.equal(result.success, false);
     assert.ok(result.error, 'an error message must be present');
+    // The body was built before the network call, so we still capture it; no
+    // parsed envelope came back, so response is undefined.
+    assert.deepEqual(result.request, captured!.body);
+    assert.equal(result.response, undefined);
   });
 
   test('missing private key → { success:false, error } about missing credential', async () => {

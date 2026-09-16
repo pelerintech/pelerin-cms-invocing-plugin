@@ -54,17 +54,25 @@ export interface CreateResult {
   number?: string;
   pdfLink?: string;
   error?: string;
+  /** The exact request body the adapter built and sent. */
+  request?: unknown;
+  /** The parsed provider response envelope (undefined on a network error). */
+  response?: unknown;
 }
 
 export interface PrintResult {
   success: boolean;
   pdfLink?: string;
   error?: string;
+  request?: unknown;
+  response?: unknown;
 }
 
 export interface CancelResult {
   success: boolean;
   error?: string;
+  request?: unknown;
+  response?: unknown;
 }
 
 export interface StornoResult {
@@ -72,6 +80,8 @@ export interface StornoResult {
   seriesStorno?: string;
   numberStorno?: string;
   error?: string;
+  request?: unknown;
+  response?: unknown;
 }
 
 export interface ProviderConfigField {

@@ -130,9 +130,41 @@ const isTerminal = invoice ? ['storned', 'cancelled'].includes(invoice.status) :
       '</p></div></div>' +
       '<div class="card bg-base-100 shadow"><div class="card-body"><h2 class="card-title text-lg">Order (snapshot)</h2>' +
       renderOrder(inv.snapshot) +
-      '</div></div></div>';
+      '</div></div></div>' +
+      renderExtraInfo(inv) +
+      '';
 
     document.getElementById('invoice-detail').innerHTML = html;
+  }
+
+  // The exact provider request/response captured for the latest attempt.
+  function renderExtraInfo(inv) {
+    // escapeHtml before insertion: the payload may echo customer-controlled
+    // strings (e.g. the FGO client Denumire), so it must not inject markup.
+    var req = inv.req_payload ? escapeHtml(jsonPretty(inv.req_payload)) : '—';
+    var res = inv.res_payload ? escapeHtml(jsonPretty(inv.res_payload)) : '—';
+    return (
+      '<details class="card bg-base-100 shadow mt-6">' +
+      '<summary class="card-body py-4 cursor-pointer font-semibold">Extra info</summary>' +
+      '<div class="card-body pt-0">' +
+      '<p class="text-sm font-semibold mb-1">Request payload</p>' +
+      '<pre class="text-xs bg-base-200 p-3 rounded overflow-auto whitespace-pre-wrap">' +
+      req +
+      '</pre>' +
+      '<p class="text-sm font-semibold mt-3 mb-1">Response payload</p>' +
+      '<pre class="text-xs bg-base-200 p-3 rounded overflow-auto whitespace-pre-wrap">' +
+      res +
+      '</pre>' +
+      '</div></details>'
+    );
+  }
+
+  function jsonPretty(str) {
+    try {
+      return JSON.stringify(JSON.parse(str), null, 2);
+    } catch (e) {
+      return str;
+    }
   }
 
   // The stored snapshot is the ecomm order `data`: { order, billing_address, items }.

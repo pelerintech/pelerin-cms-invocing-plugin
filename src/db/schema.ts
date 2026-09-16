@@ -56,6 +56,8 @@ export const invoices = sqliteTable('invoices', {
   pdf_link: text('pdf_link'),
   provider_ref: text('provider_ref'),
   error: text('error'),
+  req_payload: text('req_payload'),
+  res_payload: text('res_payload'),
   issue_date: dateType('issue_date'),
   created_at: dateType('created_at').notNull(),
   updated_at: dateType('updated_at').notNull(),

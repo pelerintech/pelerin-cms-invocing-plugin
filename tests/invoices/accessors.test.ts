@@ -110,6 +110,21 @@ describe('invoice accessors', () => {
     assert.ok(row.updated_at.getTime() >= origUpdated, 'updated_at must be bumped');
   });
 
+  test('setInvoiceStatus stores the captured req_payload / res_payload', async () => {
+    const created = await createInvoice(db, {
+      orderId: 'order-1',
+      payload: samplePayload(),
+      provider: 'fgo',
+    });
+    await setInvoiceStatus(db, created.id, 'issued', {
+      req_payload: JSON.stringify({ CodUnic: 'RO123' }),
+      res_payload: JSON.stringify({ Success: true }),
+    });
+    const row = await getInvoiceById(db, created.id);
+    assert.equal(row.req_payload, JSON.stringify({ CodUnic: 'RO123' }));
+    assert.equal(row.res_payload, JSON.stringify({ Success: true }));
+  });
+
   test('setInvoiceStatus can store an error on failure', async () => {
     const created = await createInvoice(db, {
       orderId: 'order-1',

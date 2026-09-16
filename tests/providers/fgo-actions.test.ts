@@ -77,6 +77,8 @@ describe('FGO print / cancel / storno (stubbed fetch)', () => {
     assert.equal(captured!.body.CodUnic, CUI);
     assert.equal(captured!.body.Numar, NUMBER);
     assert.equal(captured!.body.PlatformaUrl, URL);
+    assert.deepEqual(result.request, captured!.body);
+    assert.deepEqual(result.response, { Success: true, Factura: { Link: 'https://pdf' } });
   });
 
   test('cancel posts the cancel endpoint and returns success', async () => {
@@ -88,6 +90,8 @@ describe('FGO print / cancel / storno (stubbed fetch)', () => {
     assert.equal(captured!.body.CodUnic, CUI);
     assert.equal(captured!.body.Numar, NUMBER);
     assert.equal(captured!.body.Serie, SERIE);
+    assert.deepEqual(result.request, captured!.body);
+    assert.deepEqual(result.response, { Success: true, Factura: {} });
   });
 
   test('storno returns success + storno refs', async () => {
@@ -110,28 +114,48 @@ describe('FGO print / cancel / storno (stubbed fetch)', () => {
     assert.equal(captured!.body.CodUnic, CUI);
     assert.equal(captured!.body.Numar, NUMBER);
     assert.equal(captured!.body.Serie, SERIE);
+    assert.deepEqual(result.request, captured!.body);
+    assert.deepEqual(result.response, {
+      Success: true,
+      Factura: { SerieStorno: 'FGO2026', NumarStorno: '43' },
+    });
   });
 
   test('provider error → { success:false, error }', async () => {
-    globalThis.fetch = async () => ({
-      ok: true,
-      json: async () => ({ Success: false, Message: 'Nu exista factura' }),
-      text: async () => '',
-    });
+    globalThis.fetch = async (url: string, options: any) => {
+      captured = { url, body: JSON.parse(options.body) };
+      return {
+        ok: true,
+        json: async () => ({ Success: false, Message: 'Nu exista factura' }),
+        text: async () => '',
+      };
+    };
     await configure(db);
-    assert.equal((await fgo.print(db, SERIE, NUMBER)).success, false);
-    assert.equal((await fgo.cancel(db, SERIE, NUMBER)).success, false);
+    const pr = await fgo.print(db, SERIE, NUMBER);
+    assert.equal(pr.success, false);
+    assert.deepEqual(pr.request, captured!.body);
+    assert.deepEqual(pr.response, { Success: false, Message: 'Nu exista factura' });
+    const ca = await fgo.cancel(db, SERIE, NUMBER);
+    assert.equal(ca.success, false);
+    assert.deepEqual(ca.request, captured!.body);
+    assert.deepEqual(ca.response, { Success: false, Message: 'Nu exista factura' });
     const st = await fgo.storno(db, SERIE, NUMBER);
     assert.equal(st.success, false);
     assert.ok(st.error, 'an error message must be set');
+    assert.deepEqual(st.request, captured!.body);
+    assert.deepEqual(st.response, { Success: false, Message: 'Nu exista factura' });
   });
 
-  test('network failure → { success:false, error }', async () => {
-    globalThis.fetch = async () => {
+  test('network failure → { success:false, error } and returns the request body', async () => {
+    globalThis.fetch = async (url: string, options: any) => {
+      captured = { url, body: JSON.parse(options.body) };
       throw new Error('TIMEOUT');
     };
     await configure(db);
-    assert.equal((await fgo.print(db, SERIE, NUMBER)).success, false);
+    const pr = await fgo.print(db, SERIE, NUMBER);
+    assert.equal(pr.success, false);
+    assert.deepEqual(pr.request, captured!.body);
+    assert.equal(pr.response, undefined);
   });
 
   test('actions run with only cui/private_key/url configured (serie/tip unneeded)', async () => {
