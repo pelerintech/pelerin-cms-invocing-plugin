@@ -19,7 +19,8 @@ registerProvider(
     'fgo_private_key',
     'fgo_serie',
     'fgo_tip_factura',
-    'fgo_platforma_url',
+    'fgo_api_url',
+    'fgo_platform_redirect_url',
   ])
 );
 
@@ -86,7 +87,8 @@ describe('isProviderConfigured', () => {
     await setSetting(db, 'fgo_private_key', encrypt('key'));
     await setSetting(db, 'fgo_serie', encrypt('FGO'));
     await setSetting(db, 'fgo_tip_factura', encrypt('FACTURA'));
-    await setSetting(db, 'fgo_platforma_url', encrypt('https://api.fgo.ro/v1'));
+    await setSetting(db, 'fgo_api_url', encrypt('https://api.fgo.ro/v1'));
+    await setSetting(db, 'fgo_platform_redirect_url', encrypt('https://yourapp.com'));
     assert.strictEqual(await isProviderConfigured(db, 'fgo'), true);
   });
 

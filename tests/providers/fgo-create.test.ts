@@ -22,7 +22,8 @@ const CUI = 'RO12345678';
 const PRIVATE_KEY = 'my-private-key';
 const SERIE = 'FGO2026';
 const TIP = 'Factura';
-const URL = 'https://api-testuat.fgo.ro/v1';
+const API_URL = 'https://api-testuat.fgo.ro/v1';
+const PLATFORM_URL = 'https://yourapp.com';
 
 function configure(db: any) {
   return Promise.all([
@@ -30,7 +31,8 @@ function configure(db: any) {
     setSetting(db, 'fgo_private_key', encrypt(PRIVATE_KEY)),
     setSetting(db, 'fgo_serie', encrypt(SERIE)),
     setSetting(db, 'fgo_tip_factura', encrypt(TIP)),
-    setSetting(db, 'fgo_platforma_url', encrypt(URL)),
+    setSetting(db, 'fgo_api_url', encrypt(API_URL)),
+    setSetting(db, 'fgo_platform_redirect_url', encrypt(PLATFORM_URL)),
   ]);
 }
 
@@ -114,13 +116,15 @@ describe('FGO create (stubbed fetch)', () => {
     });
 
     assert.ok(captured, 'fetch must have been called');
-    assert.equal(captured!.url, `${URL}/factura/emitere`);
+    assert.equal(captured!.url, `${API_URL}/factura/emitere`);
 
     const b = captured!.body;
     assert.equal(b.Serie, SERIE);
     assert.equal(b.Valuta, 'RON');
     assert.equal(b.TipFactura, TIP);
-    assert.equal(b.PlatformaUrl, URL);
+    // The payload PlatformaUrl is the merchant app root, NOT the FGO API host.
+    assert.equal(b.PlatformaUrl, PLATFORM_URL);
+    assert.notEqual(b.PlatformaUrl, API_URL);
     assert.equal(b.IdExtern, 'order-42');
     assert.equal(b.VerificareDuplicat, true);
     assert.equal(b.Hash, sha1Hash(CUI, PRIVATE_KEY, 'SC Exemplu SRL'));
@@ -224,7 +228,8 @@ describe('FGO create (stubbed fetch)', () => {
     await setSetting(db, 'fgo_cui', encrypt(CUI));
     await setSetting(db, 'fgo_serie', encrypt(SERIE));
     await setSetting(db, 'fgo_tip_factura', encrypt(TIP));
-    await setSetting(db, 'fgo_platforma_url', encrypt(URL));
+    await setSetting(db, 'fgo_api_url', encrypt(API_URL));
+    await setSetting(db, 'fgo_platform_redirect_url', encrypt(PLATFORM_URL));
     const result = await fgo.create(db, draft());
     assert.equal(result.success, false);
     assert.ok(

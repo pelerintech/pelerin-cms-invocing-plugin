@@ -36,7 +36,8 @@ describe('GET /providers (providers list)', () => {
     await setSetting(db, 'fgo_private_key', encrypt('k'));
     await setSetting(db, 'fgo_serie', encrypt('FGO'));
     await setSetting(db, 'fgo_tip_factura', encrypt('FACTURA'));
-    await setSetting(db, 'fgo_platforma_url', encrypt('https://api.fgo.ro/v1'));
+    await setSetting(db, 'fgo_api_url', encrypt('https://api.fgo.ro/v1'));
+    await setSetting(db, 'fgo_platform_redirect_url', encrypt('https://yourapp.com'));
 
     const res = await providersIndex.runGet({
       db,

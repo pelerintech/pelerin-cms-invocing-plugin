@@ -99,7 +99,8 @@ export async function create(db: LibSQLDatabase, draft: InvoiceDraft): Promise<C
     'fgo_private_key',
     'fgo_serie',
     'fgo_tip_factura',
-    'fgo_platforma_url',
+    'fgo_api_url',
+    'fgo_platform_redirect_url',
   ]);
   if (loaded.missing) return { success: false, error: loaded.missing };
   const {
@@ -107,7 +108,8 @@ export async function create(db: LibSQLDatabase, draft: InvoiceDraft): Promise<C
     fgo_private_key: key,
     fgo_serie: serie,
     fgo_tip_factura: tip,
-    fgo_platforma_url: url,
+    fgo_api_url: apiUrl,
+    fgo_platform_redirect_url: platformUrl,
   } = loaded.creds;
 
   const body = {
@@ -141,13 +143,14 @@ export async function create(db: LibSQLDatabase, draft: InvoiceDraft): Promise<C
       CotaTVA: Math.round((line.vatRate || 0) * 100),
       PretUnitar: line.unitPriceNet,
     })),
-    PlatformaUrl: url,
+    // PlatformaUrl is the root of OUR app (customer confirmation site), not the FGO API host.
+    PlatformaUrl: platformUrl,
     IdExtern: draft.externalOrderId,
     VerificareDuplicat: true,
   };
 
   try {
-    const data = await postJson<FgoResponse>(`${url}/factura/emitere`, body);
+    const data = await postJson<FgoResponse>(`${apiUrl}/factura/emitere`, body);
     if (data && data.Success === true) {
       return {
         success: true,
@@ -170,7 +173,7 @@ export async function create(db: LibSQLDatabase, draft: InvoiceDraft): Promise<C
 }
 
 /** Credentials the non-create actions actually need (no emit-only serie/tip). */
-const ACTION_KEYS = ['fgo_cui', 'fgo_private_key', 'fgo_platforma_url'];
+const ACTION_KEYS = ['fgo_cui', 'fgo_private_key', 'fgo_api_url', 'fgo_platform_redirect_url'];
 
 export async function print(
   db: LibSQLDatabase,
@@ -179,17 +182,22 @@ export async function print(
 ): Promise<PrintResult> {
   const loaded = await loadCredentials(db, ACTION_KEYS);
   if (loaded.missing) return { success: false, error: loaded.missing };
-  const { fgo_cui: cui, fgo_private_key: key, fgo_platforma_url: url } = loaded.creds;
+  const {
+    fgo_cui: cui,
+    fgo_private_key: key,
+    fgo_api_url: apiUrl,
+    fgo_platform_redirect_url: platformUrl,
+  } = loaded.creds;
 
   const body = {
     CodUnic: cui,
     Numar: number,
     Serie: series,
     Hash: hashAuth(cui, key, number),
-    PlatformaUrl: url,
+    PlatformaUrl: platformUrl,
   };
   try {
-    const data = await postJson<FgoResponse>(`${url}/factura/pdf`, body);
+    const data = await postJson<FgoResponse>(`${apiUrl}/factura/pdf`, body);
     if (data && data.Success === true) {
       return {
         success: true,
@@ -216,17 +224,22 @@ export async function cancel(
 ): Promise<CancelResult> {
   const loaded = await loadCredentials(db, ACTION_KEYS);
   if (loaded.missing) return { success: false, error: loaded.missing };
-  const { fgo_cui: cui, fgo_private_key: key, fgo_platforma_url: url } = loaded.creds;
+  const {
+    fgo_cui: cui,
+    fgo_private_key: key,
+    fgo_api_url: apiUrl,
+    fgo_platform_redirect_url: platformUrl,
+  } = loaded.creds;
 
   const body = {
     CodUnic: cui,
     Numar: number,
     Serie: series,
     Hash: hashAuth(cui, key, number),
-    PlatformaUrl: url,
+    PlatformaUrl: platformUrl,
   };
   try {
-    const data = await postJson<FgoResponse>(`${url}/factura/anulare`, body);
+    const data = await postJson<FgoResponse>(`${apiUrl}/factura/anulare`, body);
     if (data && data.Success === true) {
       return { success: true, request: body, response: data };
     }
@@ -248,17 +261,22 @@ export async function storno(
 ): Promise<StornoResult> {
   const loaded = await loadCredentials(db, ACTION_KEYS);
   if (loaded.missing) return { success: false, error: loaded.missing };
-  const { fgo_cui: cui, fgo_private_key: key, fgo_platforma_url: url } = loaded.creds;
+  const {
+    fgo_cui: cui,
+    fgo_private_key: key,
+    fgo_api_url: apiUrl,
+    fgo_platform_redirect_url: platformUrl,
+  } = loaded.creds;
 
   const body = {
     CodUnic: cui,
     Numar: number,
     Serie: series,
     Hash: hashAuth(cui, key, number),
-    PlatformaUrl: url,
+    PlatformaUrl: platformUrl,
   };
   try {
-    const data = await postJson<FgoResponse>(`${url}/factura/storno`, body);
+    const data = await postJson<FgoResponse>(`${apiUrl}/factura/storno`, body);
     if (data && data.Success === true) {
       return {
         success: true,
@@ -286,25 +304,24 @@ export function getConfigSchema(): ProviderConfigSchema {
       'fgo_private_key',
       'fgo_serie',
       'fgo_tip_factura',
-      'fgo_platforma_url',
+      'fgo_api_url',
+      'fgo_platform_redirect_url',
     ],
     fields: {
-      fgo_environment: {
-        type: 'select',
-        label: 'Environment',
-        description: 'Test (api-testuat.fgo.ro) or production (api.fgo.ro).',
-        default: 'test',
-        options: [
-          { value: 'test', label: 'Test' },
-          { value: 'prod', label: 'Production' },
-        ],
-      },
-      fgo_platforma_url: {
+      fgo_api_url: {
         type: 'text',
-        label: 'Platform URL',
-        description: 'FGO API base URL (e.g. https://api-testuat.fgo.ro/v1).',
+        label: 'FGO API URL',
+        description:
+          'FGO API base URL the plugin posts to. Test: https://api-testuat.fgo.ro/v1 | Production: https://api.fgo.ro/v1.',
         default: 'https://api-testuat.fgo.ro/v1',
         placeholder: 'https://api-testuat.fgo.ro/v1',
+      },
+      fgo_platform_redirect_url: {
+        type: 'text',
+        label: 'Platform URL',
+        description:
+          'Root URL of your application (customer confirmation site/app). Sent to FGO as PlatformaUrl so it is NOT the FGO API host.',
+        placeholder: 'https://yourapp.com',
       },
       fgo_cui: {
         type: 'text',

@@ -19,7 +19,8 @@ after(() => {
 
 const CUI = 'RO12345678';
 const PRIVATE_KEY = 'my-private-key';
-const URL = 'https://api-testuat.fgo.ro/v1';
+const API_URL = 'https://api-testuat.fgo.ro/v1';
+const PLATFORM_URL = 'https://yourapp.com';
 const SERIE = 'FGO2026';
 const NUMBER = '42';
 
@@ -29,7 +30,8 @@ function configure(db: any) {
     setSetting(db, 'fgo_private_key', encrypt(PRIVATE_KEY)),
     setSetting(db, 'fgo_serie', encrypt(SERIE)),
     setSetting(db, 'fgo_tip_factura', encrypt('FACTURA')),
-    setSetting(db, 'fgo_platforma_url', encrypt(URL)),
+    setSetting(db, 'fgo_api_url', encrypt(API_URL)),
+    setSetting(db, 'fgo_platform_redirect_url', encrypt(PLATFORM_URL)),
   ]);
 }
 
@@ -71,12 +73,12 @@ describe('FGO print / cancel / storno (stubbed fetch)', () => {
     const result = await fgo.print(db, SERIE, NUMBER);
     assert.equal(result.success, true);
     assert.equal(result.pdfLink, 'https://pdf');
-    assert.equal(captured!.url, `${URL}/factura/pdf`);
+    assert.equal(captured!.url, `${API_URL}/factura/pdf`);
     assert.equal(captured!.body.Hash, sha1Hash(`${CUI}${PRIVATE_KEY}${NUMBER}`));
     assert.equal(captured!.body.Serie, SERIE);
     assert.equal(captured!.body.CodUnic, CUI);
     assert.equal(captured!.body.Numar, NUMBER);
-    assert.equal(captured!.body.PlatformaUrl, URL);
+    assert.equal(captured!.body.PlatformaUrl, PLATFORM_URL);
     assert.deepEqual(result.request, captured!.body);
     assert.deepEqual(result.response, { Success: true, Factura: { Link: 'https://pdf' } });
   });
@@ -85,7 +87,7 @@ describe('FGO print / cancel / storno (stubbed fetch)', () => {
     await configure(db);
     const result = await fgo.cancel(db, SERIE, NUMBER);
     assert.equal(result.success, true);
-    assert.equal(captured!.url, `${URL}/factura/anulare`);
+    assert.equal(captured!.url, `${API_URL}/factura/anulare`);
     assert.equal(captured!.body.Hash, sha1Hash(`${CUI}${PRIVATE_KEY}${NUMBER}`));
     assert.equal(captured!.body.CodUnic, CUI);
     assert.equal(captured!.body.Numar, NUMBER);
@@ -163,20 +165,25 @@ describe('FGO print / cancel / storno (stubbed fetch)', () => {
     // keys must not block print/cancel/storno.
     await setSetting(db, 'fgo_cui', encrypt(CUI));
     await setSetting(db, 'fgo_private_key', encrypt(PRIVATE_KEY));
-    await setSetting(db, 'fgo_platforma_url', encrypt(URL));
+    await setSetting(db, 'fgo_api_url', encrypt(API_URL));
+    await setSetting(db, 'fgo_platform_redirect_url', encrypt(PLATFORM_URL));
 
     assert.equal((await fgo.print(db, SERIE, NUMBER)).success, true);
-    assert.equal(captured!.url, `${URL}/factura/pdf`);
+    assert.equal(captured!.url, `${API_URL}/factura/pdf`);
+    assert.equal(captured!.body.PlatformaUrl, PLATFORM_URL);
     assert.equal((await fgo.cancel(db, SERIE, NUMBER)).success, true);
-    assert.equal(captured!.url, `${URL}/factura/anulare`);
+    assert.equal(captured!.url, `${API_URL}/factura/anulare`);
+    assert.equal(captured!.body.PlatformaUrl, PLATFORM_URL);
     assert.equal((await fgo.storno(db, SERIE, NUMBER)).success, true);
-    assert.equal(captured!.url, `${URL}/factura/storno`);
+    assert.equal(captured!.url, `${API_URL}/factura/storno`);
+    assert.equal(captured!.body.PlatformaUrl, PLATFORM_URL);
   });
 
   test('missing credential fails before any request (fetch not called)', async () => {
     // configure everything the actions need except the private key
     await setSetting(db, 'fgo_cui', encrypt(CUI));
-    await setSetting(db, 'fgo_platforma_url', encrypt(URL));
+    await setSetting(db, 'fgo_api_url', encrypt(API_URL));
+    await setSetting(db, 'fgo_platform_redirect_url', encrypt(PLATFORM_URL));
     captured = null;
     const res = await fgo.print(db, SERIE, NUMBER);
     assert.equal(res.success, false);
@@ -186,17 +193,26 @@ describe('FGO print / cancel / storno (stubbed fetch)', () => {
 });
 
 describe('FGO getConfigSchema', () => {
-  test('requiredKeys include the emit credentials', () => {
+  test('requiredKeys include the new URL settings and exclude legacy/environment', () => {
     const schema = fgo.getConfigSchema();
     for (const k of [
       'fgo_cui',
       'fgo_private_key',
       'fgo_serie',
       'fgo_tip_factura',
-      'fgo_platforma_url',
+      'fgo_api_url',
+      'fgo_platform_redirect_url',
     ]) {
       assert.ok(schema.requiredKeys.includes(k), `${k} must be required`);
     }
+    assert.ok(
+      !schema.requiredKeys.includes('fgo_platforma_url'),
+      'legacy key must not be required'
+    );
+    assert.ok(
+      !schema.requiredKeys.includes('fgo_environment'),
+      'environment key must not be required'
+    );
   });
 
   test('private key field is of type password', () => {
@@ -204,11 +220,28 @@ describe('FGO getConfigSchema', () => {
     assert.equal(schema.fields!.fgo_private_key.type, 'password');
   });
 
-  test('an environment field distinguishes test vs prod', () => {
+  test('two distinct URL fields: fgo_api_url and fgo_platform_redirect_url', () => {
     const schema = fgo.getConfigSchema();
-    assert.equal(schema.fields!.fgo_environment.type, 'select');
-    const values = (schema.fields!.fgo_environment.options || []).map((o) => o.value);
-    assert.ok(values.includes('test'));
-    assert.ok(values.includes('prod'));
+    assert.equal(schema.fields!.fgo_api_url.type, 'text');
+    assert.equal(schema.fields!.fgo_platform_redirect_url.type, 'text');
+  });
+
+  test('fgo_api_url help text names the test and prod hosts', () => {
+    const schema = fgo.getConfigSchema();
+    const d = schema.fields!.fgo_api_url.description;
+    assert.ok(/api-testuat\.fgo\.ro/.test(d), 'help text must name the test host');
+    assert.ok(/api\.fgo\.ro/.test(d), 'help text must name the prod host');
+  });
+
+  test('fgo_platform_redirect_url help text describes the app root (not the FGO host)', () => {
+    const schema = fgo.getConfigSchema();
+    const d = schema.fields!.fgo_platform_redirect_url.description;
+    assert.ok(/root of your application|root URL of your application/i.test(d));
+  });
+
+  test('legacy and environment fields are removed', () => {
+    const schema = fgo.getConfigSchema();
+    assert.equal(schema.fields!.fgo_environment, undefined);
+    assert.equal(schema.fields!.fgo_platforma_url, undefined);
   });
 });
