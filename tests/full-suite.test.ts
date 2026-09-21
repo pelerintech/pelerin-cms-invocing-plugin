@@ -39,6 +39,7 @@ const TEST_FILES: string[] = [
   'tests/lib/data/dev-logs.test.ts',
   'tests/lib/data/settings.test.ts',
   'tests/lib/dev-mode.test.ts',
+  'tests/lib/invoice-ready.test.ts',
   'tests/manifest.test.ts',
   'tests/pages/admin-invoices-id-syntax.test.ts',
   'tests/pages/admin-invoices-index-syntax.test.ts',

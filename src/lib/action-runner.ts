@@ -16,6 +16,7 @@ import { buildInvoiceDraft } from '../providers/invoicing/draft.ts';
 import { getInvoiceById, setInvoiceStatus } from './data/invoices.ts';
 import { captureRequest } from './dev-capture.ts';
 import { isDevMode } from './dev-mode.ts';
+import { publishInvoiceReady, type PublishEvent } from './invoice-ready.ts';
 import { parseSnapshot } from './order-payload.ts';
 
 export interface ActionResult {
@@ -53,11 +54,18 @@ async function resolveProvider(
   return getProvider(invoice.provider ?? 'fgo');
 }
 
+/** Optional behavior options for the action runner actions. */
+export interface ActionOptions {
+  /** The event bus `publish` callback, used to emit `invoicing.invoice.ready`. */
+  publish?: PublishEvent;
+}
+
 /** Retry a failed invoice: rebuild draft from stored snapshot and emit again. */
 export async function retryInvoice(
   db: LibSQLDatabase,
   invoiceId: string,
-  providerOverride?: InvoicingProvider
+  providerOverride?: InvoicingProvider,
+  opts: ActionOptions = {}
 ): Promise<ActionResult> {
   const invoice = await getInvoiceById(db, invoiceId);
   if (!invoice) return { ok: false, error: 'Invoice not found' };
@@ -79,7 +87,7 @@ export async function retryInvoice(
   }
 
   if (result.success) {
-    await setInvoiceStatus(db, invoiceId, 'issued', {
+    const row = await setInvoiceStatus(db, invoiceId, 'issued', {
       series: result.series ?? null,
       number: result.number ?? null,
       pdf_link: result.pdfLink ?? null,
@@ -89,6 +97,7 @@ export async function retryInvoice(
       req_payload: JSON.stringify(result.request),
       res_payload: JSON.stringify(result.response),
     });
+    publishInvoiceReady(opts.publish, row);
     return { ok: true, status: 'issued' };
   }
   await setInvoiceStatus(db, invoiceId, 'failed', {

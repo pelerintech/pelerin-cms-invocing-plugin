@@ -24,6 +24,7 @@ import {
 } from './data/invoices.ts';
 import { captureRequest } from './dev-capture.ts';
 import { isDevMode } from './dev-mode.ts';
+import { publishInvoiceReady, type PublishEvent } from './invoice-ready.ts';
 import type { OrderInvoicePayload } from './order-payload.ts';
 import '../providers/invoicing/fgo.ts'; // auto-register the default provider
 
@@ -33,6 +34,8 @@ export interface IngestOptions {
   /** Force a providerName when creating the row. */
   providerName?: string;
   issueDate?: string;
+  /** The event bus `publish` callback, used to emit `invoicing.invoice.ready`. */
+  publish?: PublishEvent;
 }
 
 export interface IngestResult {
@@ -85,7 +88,7 @@ async function emitInvoice(
   }
 
   if (result.success) {
-    await setInvoiceStatus(db, invoiceId, 'issued', {
+    const row = await setInvoiceStatus(db, invoiceId, 'issued', {
       series: result.series ?? null,
       number: result.number ?? null,
       pdf_link: result.pdfLink ?? null,
@@ -95,6 +98,7 @@ async function emitInvoice(
       req_payload: JSON.stringify(result.request),
       res_payload: JSON.stringify(result.response),
     });
+    publishInvoiceReady(opts.publish, row);
     return { status: 'issued', id: invoiceId, reprocessed: false };
   }
   await setInvoiceStatus(db, invoiceId, 'failed', {

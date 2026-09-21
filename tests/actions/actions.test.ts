@@ -9,6 +9,7 @@ import {
   cancelInvoice,
 } from '../../src/lib/action-runner.ts';
 import type { InvoicingProvider } from '../../src/providers/invoicing/interface.ts';
+import type { PublishEvent } from '../../src/lib/invoice-ready.ts';
 import { orderData } from '../fixtures/order-data.ts';
 
 let db: any;
@@ -119,6 +120,43 @@ describe('action dispatch (retry / print / storno / cancel)', () => {
     assert.equal(row!.error, 'still rejected');
     assert.equal(row!.req_payload, JSON.stringify({ CodUnic: 'RO1' }));
     assert.equal(row!.res_payload, JSON.stringify({ Success: false, Message: 'still rejected' }));
+  });
+
+  test('retryInvoice: successful re-emit with a link publishes invoicing.invoice.ready once', async () => {
+    const s = stub();
+    s.createResult = { success: true, series: 'FGO', number: '10', pdfLink: 'https://pdf' };
+    const id = await failedInvoice('o-retry-pub-1');
+    const calls: { event: string; data: Record<string, unknown> }[] = [];
+    const publish: PublishEvent = (event, data) => calls.push({ event, data });
+    const res = await retryInvoice(db, id, s.provider, { publish });
+    assert.equal(res.ok, true);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].event, 'invoicing.invoice.ready');
+    const inv = calls[0].data.invoice as Record<string, unknown>;
+    assert.equal(inv.pdf_link, 'https://pdf');
+    assert.equal(inv.id, id);
+  });
+
+  test('retryInvoice: successful re-emit with NO link publishes nothing', async () => {
+    const s = stub();
+    s.createResult = { success: true, series: 'FGO', number: '10' };
+    const id = await failedInvoice('o-retry-pub-2');
+    const calls: { event: string; data: Record<string, unknown> }[] = [];
+    const publish: PublishEvent = (event, data) => calls.push({ event, data });
+    const res = await retryInvoice(db, id, s.provider, { publish });
+    assert.equal(res.ok, true);
+    assert.equal(calls.length, 0);
+  });
+
+  test('retryInvoice: failed re-emit publishes nothing', async () => {
+    const s = stub();
+    s.createResult = { success: false, error: 'still rejected' };
+    const id = await failedInvoice('o-retry-pub-3');
+    const calls: { event: string; data: Record<string, unknown> }[] = [];
+    const publish: PublishEvent = (event, data) => calls.push({ event, data });
+    const res = await retryInvoice(db, id, s.provider, { publish });
+    assert.equal(res.ok, false);
+    assert.equal(calls.length, 0);
   });
 
   test('retryInvoice: non-failed invoice is rejected without a provider call', async () => {

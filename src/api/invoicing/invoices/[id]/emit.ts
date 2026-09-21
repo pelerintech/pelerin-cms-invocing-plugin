@@ -11,5 +11,7 @@ import { runAction, makeWrapper } from '../../action-handler';
 export const POST = makeWrapper(runPost);
 
 export async function runPost(deps: HandlerDeps): Promise<Response> {
-  return runAction(deps, (db, id) => retryInvoice(db, id));
+  return runAction(deps, (db, id) =>
+    retryInvoice(db, id, undefined, { publish: deps.sdk.events.publish })
+  );
 }

@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import { createTestDb } from '../db/harness.ts';
 import { ingestInvoice } from '../../src/lib/dispatch.ts';
 import { getInvoiceByOrder, getInvoiceById } from '../../src/lib/data/invoices.ts';
+import type { PublishEvent } from '../../src/lib/invoice-ready.ts';
 import type { InvoicingProvider } from '../../src/providers/invoicing/interface.ts';
 import type { OrderInvoicePayload } from '../../src/lib/order-payload.ts';
 
@@ -191,6 +192,42 @@ describe('ingestInvoice (idempotent, durable, ecomm order-data shape)', () => {
     assert.equal(row.status, 'issued');
     assert.equal(row.number, '9');
     assert.equal(row.error, null, 'error must be cleared on success');
+  });
+
+  test('successful emit with a link publishes invoicing.invoice.ready once', async () => {
+    const stub = stubProvider({
+      success: true,
+      series: 'FGO',
+      number: '8',
+      pdfLink: 'https://pdf8',
+    });
+    const calls: { event: string; data: Record<string, unknown> }[] = [];
+    const publish: PublishEvent = (event, data) => calls.push({ event, data });
+    const res = await ingestInvoice(db, payload('o-pub-1'), stub.provider, { publish });
+    assert.equal(res.status, 'issued');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].event, 'invoicing.invoice.ready');
+    const inv = calls[0].data.invoice as Record<string, unknown>;
+    assert.equal(inv.pdf_link, 'https://pdf8');
+    assert.equal(inv.customer_email, 'ana@x.ro');
+  });
+
+  test('successful emit with NO link publishes nothing', async () => {
+    const stub = stubProvider({ success: true, series: 'FGO', number: '1' });
+    const calls: { event: string; data: Record<string, unknown> }[] = [];
+    const publish: PublishEvent = (event, data) => calls.push({ event, data });
+    const res = await ingestInvoice(db, payload('o-pub-2'), stub.provider, { publish });
+    assert.equal(res.status, 'issued');
+    assert.equal(calls.length, 0);
+  });
+
+  test('failed emit publishes nothing', async () => {
+    const stub = stubProvider({ success: false, error: 'Rejected' });
+    const calls: { event: string; data: Record<string, unknown> }[] = [];
+    const publish: PublishEvent = (event, data) => calls.push({ event, data });
+    const res = await ingestInvoice(db, payload('o-pub-3'), stub.provider, { publish });
+    assert.equal(res.status, 'failed');
+    assert.equal(calls.length, 0);
   });
 
   test('idempotent: created row is retrievable by id', async () => {

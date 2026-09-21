@@ -61,6 +61,7 @@ export function makeFakeSdk(opts: FakeSdkOptions = {}): any {
     db: undefined,
     storage: {},
     webhooks: { trigger: async () => {} },
+    events: { publish: () => {}, subscribe: () => () => {} },
   };
 }
 

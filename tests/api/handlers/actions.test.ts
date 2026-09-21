@@ -60,6 +60,26 @@ describe('POST invoice actions (emit | print | storno | cancel)', () => {
     assert.equal(b.data.invoice.status, 'issued');
   });
 
+  test('emit endpoint threads sdk.events.publish into retryInvoice', async () => {
+    const id = await failedInvoice(db, 'a7');
+    const calls: { event: string; data: Record<string, unknown> }[] = [];
+    const sdk = {
+      ...makeFakeSdk(),
+      events: {
+        publish: (event: string, data: Record<string, unknown>) => calls.push({ event, data }),
+        subscribe: () => () => {},
+      },
+    };
+    const res = await emit.runPost({
+      db,
+      sdk,
+      ctx: makeCtx({ url: 'http://localhost/api', params: { id } }),
+    });
+    assert.equal(res.status, 200);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].event, 'invoicing.invoice.ready');
+  });
+
   test('print: issued → success', async () => {
     const id = await issuedInvoice(db, 'a2');
     const res = await print.runPost({

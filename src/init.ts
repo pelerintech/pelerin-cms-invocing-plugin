@@ -29,6 +29,7 @@ interface InitContext {
       event: string,
       handler: (event: string, payload: BusPayload) => void | Promise<void>
     ): () => void;
+    publish(event: string, payload: Record<string, unknown>): void;
   };
 }
 
@@ -48,7 +49,9 @@ export default function init(ctx: InitContext): void {
         console.warn('[invoicing] Received shop.order.invoice without data');
         return;
       }
-      await ingestInvoice(ctx.db, data as unknown as OrderInvoicePayload);
+      await ingestInvoice(ctx.db, data as unknown as OrderInvoicePayload, undefined, {
+        publish: ctx.events.publish,
+      });
     } catch (err) {
       // Never crash the event bus.
       console.error('[invoicing] Error processing shop.order.invoice:', err);
