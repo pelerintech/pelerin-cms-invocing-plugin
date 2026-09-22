@@ -143,6 +143,7 @@ export async function printInvoice(
   }
   await setInvoiceStatus(db, invoiceId, invoice.status, {
     ...(result.pdfLink && !invoice.pdf_link ? { pdf_link: result.pdfLink } : {}),
+    error: null,
     req_payload: JSON.stringify(result.request),
     res_payload: JSON.stringify(result.response),
   });

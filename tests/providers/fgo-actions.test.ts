@@ -39,6 +39,19 @@ function sha1Hash(value: string): string {
   return crypto.createHash('sha1').update(value).digest('hex').toUpperCase();
 }
 
+/** A minimal `Response`-like JSON stub for the new text-first postJson. */
+function jsonResponse(body: unknown, status = 200): any {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: {
+      get: (name: string) =>
+        String(name).toLowerCase() === 'content-type' ? 'application/json' : null,
+    },
+    text: async () => JSON.stringify(body),
+  };
+}
+
 describe('FGO print / cancel / storno (stubbed fetch)', () => {
   let db: any;
   let captured: { url: string; body: any } | null;
@@ -49,11 +62,7 @@ describe('FGO print / cancel / storno (stubbed fetch)', () => {
     captured = null;
     globalThis.fetch = async (url: string, options: any) => {
       captured = { url, body: JSON.parse(options.body) };
-      return {
-        ok: true,
-        json: async () => ({ Success: true, Factura: {} }),
-        text: async () => '',
-      };
+      return jsonResponse({ Success: true, Factura: {} });
     };
   });
   afterEach(() => {
@@ -63,11 +72,7 @@ describe('FGO print / cancel / storno (stubbed fetch)', () => {
   test('print posts /factura/pdf with Hash=SHA1(CUI+key+number) and returns pdfLink', async () => {
     globalThis.fetch = async (url: string, options: any) => {
       captured = { url, body: JSON.parse(options.body) };
-      return {
-        ok: true,
-        json: async () => ({ Success: true, Factura: { Link: 'https://pdf' } }),
-        text: async () => '',
-      };
+      return jsonResponse({ Success: true, Factura: { Link: 'https://pdf' } });
     };
     await configure(db);
     const result = await fgo.print(db, SERIE, NUMBER);
@@ -99,14 +104,10 @@ describe('FGO print / cancel / storno (stubbed fetch)', () => {
   test('storno returns success + storno refs', async () => {
     globalThis.fetch = async (url: string, options: any) => {
       captured = { url, body: JSON.parse(options.body) };
-      return {
-        ok: true,
-        json: async () => ({
-          Success: true,
-          Factura: { SerieStorno: 'FGO2026', NumarStorno: '43' },
-        }),
-        text: async () => '',
-      };
+      return jsonResponse({
+        Success: true,
+        Factura: { SerieStorno: 'FGO2026', NumarStorno: '43' },
+      });
     };
     await configure(db);
     const result = await fgo.storno(db, SERIE, NUMBER);
@@ -126,11 +127,7 @@ describe('FGO print / cancel / storno (stubbed fetch)', () => {
   test('provider error → { success:false, error }', async () => {
     globalThis.fetch = async (url: string, options: any) => {
       captured = { url, body: JSON.parse(options.body) };
-      return {
-        ok: true,
-        json: async () => ({ Success: false, Message: 'Nu exista factura' }),
-        text: async () => '',
-      };
+      return jsonResponse({ Success: false, Message: 'Nu exista factura' });
     };
     await configure(db);
     const pr = await fgo.print(db, SERIE, NUMBER);

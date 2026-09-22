@@ -208,6 +208,25 @@ describe('action dispatch (retry / print / storno / cancel)', () => {
     assert.equal(row!.pdf_link, 'https://pdf-print');
   });
 
+  test('printInvoice: a successful print clears a stale error from a prior failure', async () => {
+    const s = stub();
+    s.printResult = {
+      success: true,
+      pdfLink: 'https://pdf-print',
+      request: { Serie: 'FGO', Numar: '42' },
+      response: { Success: true, Factura: { Link: 'https://pdf-print' } },
+    };
+    const id = await issuedInvoice('o-print-clear');
+    // Simulate a prior failed operation that left a cryptic error on the row.
+    await setInvoiceStatus(db, id, 'issued', {
+      error: 'Unexpected token <\'\", \"<!DOCTYPE... is not valid JSON',
+    });
+    const res = await printInvoice(db, id, s.provider);
+    assert.equal(res.ok, true);
+    const row = await getInvoiceById(db, id);
+    assert.equal(row!.error, null, 'successful print must clear the stale error');
+  });
+
   test('printInvoice: terminal invoice rejected without provider call', async () => {
     const s = stub();
     const id = await issuedInvoice('o-print-3');

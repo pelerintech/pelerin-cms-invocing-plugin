@@ -66,7 +66,26 @@ async function postJson<T extends object>(url: string, body: Record<string, unkn
       body: JSON.stringify(body),
       signal: controller.signal,
     });
-    return (await res.json()) as T;
+
+    // FGO returns JSON both on success AND on domain errors (Success:false with
+    // a Message). A non-JSON body — an HTML error/rate-limit page, or a redirect
+    // that fetch followed into markup — must never be force-parsed, because
+    // `res.json()` then throws the opaque `Unexpected token '<'`. Read the raw
+    // body and surface a readable error instead.
+    const text = await res.text();
+    const trimmed = text.trim();
+    const contentType = (res.headers?.get?.('content-type') || '').toLowerCase();
+    if (contentType.includes('json') || trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        return JSON.parse(trimmed) as T;
+      } catch {
+        // fall through to the non-JSON error below
+      }
+    }
+    const snippet = trimmed.replace(/\s+/g, ' ').slice(0, 200);
+    throw new Error(
+      `FGO returned non-JSON (HTTP ${res.status}, ${contentType || 'no content-type'}): ${snippet}`
+    );
   } finally {
     clearTimeout(timer);
   }

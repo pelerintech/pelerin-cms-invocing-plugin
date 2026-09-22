@@ -76,6 +76,19 @@ function sha1Hash(cui: string, key: string, name: string): string {
   return crypto.createHash('sha1').update(`${cui}${key}${name}`).digest('hex').toUpperCase();
 }
 
+/** A minimal `Response`-like JSON stub for the new text-first postJson. */
+function jsonResponse(body: unknown, status = 200): any {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: {
+      get: (name: string) =>
+        String(name).toLowerCase() === 'content-type' ? 'application/json' : null,
+    },
+    text: async () => JSON.stringify(body),
+  };
+}
+
 describe('FGO create (stubbed fetch)', () => {
   let db: any;
   let captured: { url: string; body: any } | null;
@@ -86,14 +99,10 @@ describe('FGO create (stubbed fetch)', () => {
     captured = null;
     globalThis.fetch = async (url: string, options: any) => {
       captured = { url, body: JSON.parse(options.body) };
-      return {
-        ok: true,
-        json: async () => ({
-          Success: true,
-          Factura: { Serie: 'FGO2026', Numar: '42', Link: 'https://pdf' },
-        }),
-        text: async () => '',
-      };
+      return jsonResponse({
+        Success: true,
+        Factura: { Serie: 'FGO2026', Numar: '42', Link: 'https://pdf' },
+      });
     };
   });
   afterEach(() => {
@@ -193,11 +202,7 @@ describe('FGO create (stubbed fetch)', () => {
   test('Success:false maps to { success:false, error: Message }', async () => {
     globalThis.fetch = async (url: string, options: any) => {
       captured = { url, body: JSON.parse(options.body) };
-      return {
-        ok: true,
-        json: async () => ({ Success: false, Message: 'Serie invalida' }),
-        text: async () => '',
-      };
+      return jsonResponse({ Success: false, Message: 'Serie invalida' });
     };
     await configure(db);
     const result = await fgo.create(db, draft());
@@ -219,6 +224,31 @@ describe('FGO create (stubbed fetch)', () => {
     assert.ok(result.error, 'an error message must be present');
     // The body was built before the network call, so we still capture it; no
     // parsed envelope came back, so response is undefined.
+    assert.deepEqual(result.request, captured!.body);
+    assert.equal(result.response, undefined);
+  });
+
+  test('a non-JSON (HTML) response surfaces a readable error, not `Unexpected token`', async () => {
+    globalThis.fetch = async (url: string, options: any) => {
+      captured = { url, body: JSON.parse(options.body) };
+      return {
+        ok: false,
+        status: 503,
+        headers: {
+          get: (n: string) => (String(n).toLowerCase() === 'content-type' ? 'text/html' : null),
+        },
+        text: async () => '<!DOCTYPE html><html><body>Service Unavailable</body></html>',
+      };
+    };
+    await configure(db);
+    const result = await fgo.create(db, draft());
+    assert.equal(result.success, false);
+    assert.ok(/non-JSON/i.test(result.error || ''), `unexpected error: ${result.error}`);
+    assert.ok(
+      !/Unexpected token/.test(result.error || ''),
+      'must not leak the opaque JSON.parse error'
+    );
+    // The request body is still captured; no parsed envelope came back.
     assert.deepEqual(result.request, captured!.body);
     assert.equal(result.response, undefined);
   });
